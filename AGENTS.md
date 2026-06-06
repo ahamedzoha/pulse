@@ -26,7 +26,7 @@ This file is the **on-ramp** for AI agents working in this repo. **Authoritative
 
 | Layer | Technology |
 |-------|------------|
-| Auth | Microsoft Entra ID (trial tenant) via MSAL Node OIDC in NestJS; app session JWT (passport-jwt); `groups` → RBAC |
+| Auth | Microsoft Entra ID (Free tier OK) via MSAL Node OIDC in NestJS; app session JWT (passport-jwt); `groups` → RBAC |
 | Frontends | Next.js App Router, TypeScript, Tailwind CSS |
 | API | NestJS, TypeScript strict |
 | Database | PostgreSQL 16 + pgvector (same instance) |
@@ -58,7 +58,7 @@ pulse/
 ## Build order (follow unless told otherwise)
 
 1. Infra — Docker Compose + schema *(scaffolded)*
-2. Entra ID — trial tenant, groups, single app registration
+2. Entra ID — tenant (Free tier OK), groups, single app registration — see `docs/entra-setup.md`
 3. NestJS API — AuthModule, RolesGuard, `/auth/me`, user upsert
 4. Task CRUD + event emission → `task_events` + BullMQ `task-events` queue
 5. Workers — `embed-worker`, `health-worker` (cron 15 min), `realtime-worker` (SSE)

@@ -1,16 +1,22 @@
-// Canonical types — must match infra/postgres/init.sql CHECK constraints
+// Canonical enums — must match infra/postgres/init.sql CHECK constraints.
+// Runtime arrays are the single source; types are derived for compile-time use.
 
-export type Mood = 'high' | 'medium' | 'low' | 'neutral';
+export const MOODS = ['high', 'medium', 'low', 'neutral'] as const;
+export type Mood = (typeof MOODS)[number];
 
-export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done';
+export const TASK_STATUSES = ['todo', 'in_progress', 'review', 'done'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export type EventType =
-  | 'created'
-  | 'status_changed'
-  | 'commented'
-  | 'reassigned';
+export const EVENT_TYPES = [
+  'created',
+  'status_changed',
+  'commented',
+  'reassigned',
+] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
 
-export type Role = 'pulse-admin' | 'pulse-member' | 'pulse-viewer';
+export const ROLES = ['pulse-admin', 'pulse-member', 'pulse-viewer'] as const;
+export type Role = (typeof ROLES)[number];
 
 /** BullMQ job payload — all workers read this shape */
 export interface TaskEvent {

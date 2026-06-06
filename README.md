@@ -124,7 +124,7 @@ flowchart TB
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| Auth / SSO | Microsoft Entra ID | 1-month P1/P2 trial; MSAL Node OIDC + passport-jwt session in NestJS |
+| Auth / SSO | Microsoft Entra ID | Free tier is sufficient; MSAL Node OIDC + passport-jwt session in NestJS |
 | Frontends | Next.js (App Router) | TypeScript, Tailwind CSS |
 | Backend | NestJS | TypeScript strict, modular |
 | Database | PostgreSQL 16 | `pgvector/pgvector:pg16` image |
@@ -317,7 +317,7 @@ Use the **international** endpoint (`dashscope-intl.aliyuncs.com`), not the Chin
 | Step | Scope | Status |
 |------|-------|--------|
 | 1 | Docker Compose + schema | Done |
-| 2 | Entra ID setup (trial tenant, groups, single app registration) | Pending (manual portal) |
+| 2 | Entra ID setup (tenant, groups, single app registration) — see [`docs/entra-setup.md`](docs/entra-setup.md) | Pending (manual portal) |
 | 3 | NestJS API skeleton (MSAL OIDC, `/auth/me`, user upsert, passport-jwt, RolesGuard) | Done |
 | 4 | Task CRUD + event emission + BullMQ enqueue | Pending |
 | 5 | BullMQ workers (embed, health, realtime/SSE) | Pending |

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@azure/msal-node": "^3.5.0",
+    "@nestjs/bullmq": "^11.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
@@ -19,6 +20,7 @@
     "@nestjs/passport": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@pulse/shared-types": "workspace:*",
+    "bullmq": "^5.34.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.7",
