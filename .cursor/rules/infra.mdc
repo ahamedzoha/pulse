@@ -1,0 +1,47 @@
+---
+description: Infrastructure — Docker Compose, Postgres schema, pgvector
+globs: infra/**/*
+alwaysApply: false
+---
+
+# Infrastructure
+
+## Docker Compose (`infra/docker-compose.yml`)
+
+**Only two services:** `postgres` + `redis`. No app containers.
+
+- Postgres image: `pgvector/pgvector:pg16` (extension pre-installed)
+- Redis image: `redis:7-alpine` with AOF persistence
+- Init SQL mounted at `./postgres/init.sql` → `docker-entrypoint-initdb.d`
+
+```bash
+pnpm infra:up    # start
+pnpm infra:down  # stop
+```
+
+## Schema (`infra/postgres/init.sql`)
+
+- Extensions: `vector`, `uuid-ossp`
+- Tables: `users`, `tasks`, `task_events`, `event_embeddings`
+- Embeddings: `vector(1536)` with HNSW index (`vector_cosine_ops`)
+- All enums enforced via CHECK constraints
+
+## Connection strings
+
+```
+DATABASE_URL=postgresql://pulse:pulse@localhost:5432/pulse
+REDIS_URL=redis://localhost:6379
+```
+
+## Verify after boot
+
+```bash
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U pulse -d pulse -c "SELECT extname FROM pg_extension WHERE extname = 'vector';"
+```
+
+## Rules
+
+- Schema changes go in `init.sql` — document if migration needed for existing volumes
+- Do not add RabbitMQ, separate vector DB, or app services to Compose
+- pgvector stays co-located with Postgres — no external vector store

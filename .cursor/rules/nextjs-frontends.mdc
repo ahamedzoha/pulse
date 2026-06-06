@@ -1,0 +1,43 @@
+---
+description: Next.js frontend conventions for Board and Intel apps
+globs: apps/{board,intel}/**/*
+alwaysApply: false
+---
+
+# Next.js Frontends
+
+## Apps
+
+| App | Path | Port |
+|-----|------|------|
+| Board | `apps/board` | 3000 |
+| Intel | `apps/intel` | 3001 |
+
+Both talk to NestJS API at `API_URL` (default `http://localhost:4000`). Run on host via `pnpm dev:board` / `pnpm dev:intel`.
+
+## Auth (backend-owned)
+
+Frontends do **not** run their own OIDC. To log in, redirect the user to the API: `GET {API_URL}/auth/login`. The API runs the MSAL flow (callback `http://localhost:4000/auth/callback`) and returns an app session JWT. Store it and send as `Authorization: Bearer` on API calls. No NextAuth, no MSAL in the frontend.
+
+## Board UI requirements
+
+- Entra SSO login gate
+- Kanban columns: todo, in_progress, review, done
+- Task cards: health score badge — green >70, amber 40–70, red <40
+- Mood picker on status change, comment, reassignment modals
+- Roles: `pulse-admin` and `pulse-member` only (block `pulse-viewer`)
+
+## Intel UI requirements
+
+- All roles including `pulse-viewer` (read-only)
+- Live activity feed via SSE (no polling)
+- Health leaderboard: tasks sorted by `health_score` ASC
+- Momentum meter: rolling average mood over last 24h
+- AI panel: streaming RAG responses from `POST /api/intel/query`
+
+## Conventions
+
+- App Router, TypeScript strict, Tailwind CSS
+- `'use client'` only when hooks or browser APIs required
+- API calls server-side where possible; SSE client-side in Intel feed
+- Import shared types from `@pulse/shared-types`

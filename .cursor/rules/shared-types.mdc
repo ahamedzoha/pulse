@@ -1,0 +1,41 @@
+---
+description: Shared types package — canonical event schema and DTOs
+globs: packages/shared-types/**/*
+alwaysApply: false
+---
+
+# @pulse/shared-types
+
+Single source of truth for schemas consumed by API, workers, and frontends.
+
+## Export these
+
+- `Mood`: `'high' | 'medium' | 'low' | 'neutral'`
+- `TaskStatus`: `'todo' | 'in_progress' | 'review' | 'done'`
+- `EventType`: `'created' | 'status_changed' | 'commented' | 'reassigned'`
+- `Role`: `'pulse-admin' | 'pulse-member' | 'pulse-viewer'`
+- `TaskEvent` — canonical job payload for BullMQ workers
+- DTOs for API request/response shapes
+- Constants: decay rates, health thresholds, queue names
+
+## TaskEvent shape (workers read this)
+
+```typescript
+interface TaskEvent {
+  id: string;
+  taskId: string;
+  actorId: string;
+  eventType: EventType;
+  oldValue?: string;
+  newValue?: string;
+  commentText?: string;
+  mood: Mood;
+  occurredAt: string; // ISO 8601
+}
+```
+
+## Rules
+
+- No runtime dependencies — types + constants only
+- Match `infra/postgres/init.sql` CHECK constraints exactly
+- When schema changes, update init.sql and this package together

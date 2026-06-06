@@ -1,0 +1,121 @@
+---
+description: NestJS API conventions — auth, tasks, workers, RAG
+globs: apps/api/**/*
+alwaysApply: false
+---
+
+# NestJS API (`apps/api`)
+
+## Module layout
+
+```
+apps/api/src/
+  auth/          # MSAL OIDC flow, passport-jwt session strategy, RolesGuard
+  tasks/         # CRUD, status changes, comments, reassignment
+  events/        # task_events persistence + BullMQ enqueue
+  workers/       # embed, health, realtime processors (@nestjs/bullmq)
+  intel/         # SSE feed, leaderboard, momentum, RAG query
+  common/        # guards, decorators, filters
+```
+
+## Auth — MSAL Node (OIDC) + passport-jwt (session)
+
+`passport-azure-ad` is **deprecated**. Backend owns auth:
+
+1. `GET /auth/login` → MSAL `getAuthCodeUrl()` → redirect to Entra
+2. `GET /auth/callback` → MSAL `acquireTokenByCode()` → read `oid`/`name`/`email`/`groups` claims → upsert user → sign **app session JWT** (`@nestjs/jwt`, `JWT_SECRET`) with `{ sub, role }`
+3. Frontends send session JWT as `Authorization: Bearer` → `passport-jwt` strategy validates it
+
+```typescript
+// jwt.strategy.ts — validates the app's own session token
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor() {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: process.env.JWT_SECRET,
+    });
+  }
+  async validate(payload: { sub: string; role: Role }) {
+    return { userId: payload.sub, role: payload.role };
+  }
+}
+```
+
+Map Entra group object IDs (env) → role at callback time. `pulse-viewer` has no Board write access.
+
+## RBAC guard pattern
+
+```typescript
+// roles.decorator.ts
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
+
+// usage
+@Roles('pulse-admin', 'pulse-member')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Post('/tasks')
+createTask(...) {}
+```
+
+`RolesGuard` reads `ROLES_KEY` via `Reflector.getAllAndOverride` and checks `user.role`.
+
+## Event emission
+
+Every mutation: INSERT `task_events` → UPDATE `tasks.last_activity_at` → enqueue `task-events` job with canonical `TaskEvent` DTO from `@pulse/shared-types`. Workers JOIN `tasks` + `users` to enrich context — keep the payload minimal.
+
+## Workers (`@nestjs/bullmq`)
+
+`BullModule.forRoot({ connection })` + `registerQueue({ name: QUEUES.TASK_EVENTS })`. Each worker is a `@Processor` extending `WorkerHost`:
+
+```typescript
+@Processor(QUEUES.TASK_EVENTS)
+export class EmbedProcessor extends WorkerHost {
+  async process(job: Job<TaskEvent>) {
+    // build content_text → DashScope embed → INSERT event_embeddings
+  }
+}
+```
+
+| Processor | Action |
+|-----------|--------|
+| Embed | content_text → DashScope embed → `event_embeddings` |
+| Health | `100 - (hours × decay_rate)`, floor 0; also `@Cron('*/15 * * * *')` |
+| Realtime | push event into the SSE stream (below) |
+
+## SSE realtime (Intel feed)
+
+Native NestJS `@Sse()` returning an RxJS `Observable`. A shared `Subject<TaskEvent>` bridges the realtime processor and the stream:
+
+```typescript
+@Injectable()
+export class RealtimeService {
+  readonly stream$ = new Subject<TaskEvent>();   // processor calls .next(event)
+}
+
+@Controller('intel')
+export class IntelSseController {
+  constructor(private realtime: RealtimeService) {}
+
+  @Sse('feed')
+  feed(): Observable<MessageEvent> {
+    return this.realtime.stream$.pipe(map((event) => ({ data: event })));
+  }
+}
+```
+
+No reconnect/persistence logic — POC scope.
+
+## RAG endpoint
+
+`POST /api/intel/query`: embed question → pgvector cosine top-10 → fetch task context → Qwen stream.
+
+## DashScope client
+
+```typescript
+const client = new OpenAI({
+  apiKey: process.env.DASHSCOPE_API_KEY,
+  baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+});
+```

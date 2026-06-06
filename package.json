@@ -1,0 +1,21 @@
+{
+  "name": "pulse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Task board with health decay + mood tagging, and an AI intelligence layer (RAG over team activity)",
+  "scripts": {
+    "dev:api": "pnpm --filter @pulse/api dev",
+    "dev:board": "pnpm --filter @pulse/board dev",
+    "dev:intel": "pnpm --filter @pulse/intel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.12.1"
+}

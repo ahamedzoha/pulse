@@ -1,0 +1,12 @@
+{
+  "name": "@pulse/intel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pulse Intel — live feed, health leaderboard, momentum meter, RAG Q&A",
+  "scripts": {
+    "dev": "echo 'Next.js Intel not yet scaffolded — see README.md build order step 8'",
+    "build": "echo 'not implemented'",
+    "lint": "echo 'not implemented'",
+    "typecheck": "echo 'not implemented'"
+  }
+}

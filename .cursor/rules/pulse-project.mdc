@@ -1,0 +1,39 @@
+---
+description: Pulse monorepo — core context, stack, build order, and conventions
+alwaysApply: true
+---
+
+# Pulse — Project Rules
+
+Read **README.md** and **AGENTS.md** before implementing. This is a **demo/learning project** for RBDOps AI patterns — not production.
+
+## Stack (fixed)
+
+- **Auth:** Microsoft Entra ID → JWT `groups` claim → RBAC
+- **API:** NestJS (`apps/api`, port 4000) — runs on host
+- **Frontends:** Next.js App Router — Board `:3000`, Intel `:3001` — run on host
+- **DB:** PostgreSQL 16 + pgvector (`pgvector/pgvector:pg16`) — Docker only
+- **Queue:** BullMQ + Redis — Docker only
+- **LLM/embeddings:** DashScope via OpenAI SDK + `baseURL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+- **Package mgmt:** pnpm workspaces, TypeScript strict
+
+**Docker Compose contains Postgres + Redis only.** Never add NestJS or Next.js to Compose.
+
+## Build order
+
+1. Infra + schema → 2. Entra → 3. API auth → 4. Task CRUD + events → 5. Workers → 6. RAG → 7. Board UI → 8. Intel UI
+
+## Domain invariants
+
+- Every task mutation writes `task_events` (append-only) and enqueues BullMQ `task-events`
+- Health decay: todo=2/hr, in_progress=1/hr, review=0.5/hr, done=0; floor at 0
+- Moods: `high` | `medium` | `low` | `neutral` on every update
+- Embeddings: `text-embedding-v3`, 1536 dims → `event_embeddings.embedding vector(1536)`
+- Roles: `pulse-admin` | `pulse-member` | `pulse-viewer` from Entra group IDs in env
+
+## Code style
+
+- Real code and config, not pseudocode
+- Minimize scope — focused diffs, match existing patterns
+- Shared types in `@pulse/shared-types` — workers and API read the same DTOs
+- Engineer is experienced — skip basic explanations unless asked
