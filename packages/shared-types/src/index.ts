@@ -31,6 +31,13 @@ export interface TaskEvent {
   occurredAt: string;
 }
 
+/** Enriched event for the live activity feed (workers JOIN tasks + users) */
+export interface ActivityFeedItem extends TaskEvent {
+  taskTitle: string;
+  taskStatus: TaskStatus;
+  actorName: string;
+}
+
 /** Health decay points per hour by status */
 export const HEALTH_DECAY_RATES: Record<TaskStatus, number> = {
   todo: 2,

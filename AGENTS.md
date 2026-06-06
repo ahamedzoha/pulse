@@ -114,6 +114,9 @@ Question → DashScope `text-embedding-v3` → pgvector cosine search (top 10) �
 
 ### DashScope client
 
+DashScope == Alibaba **Model Studio** == Bailian (just rebranded console). Key setup:
+see `docs/dashscope-setup.md`.
+
 ```typescript
 import OpenAI from 'openai';
 
@@ -123,7 +126,9 @@ const client = new OpenAI({
 });
 ```
 
-Models: `qwen-plus` (LLM), `text-embedding-v3` (1536 dims).
+Models: `qwen-plus` (LLM), `text-embedding-v4` (1536 dims). **Note:** `text-embedding-v3` caps at
+1024 dims — v4 is required for the `vector(1536)` schema. Configurable via `EMBED_MODEL` /
+`EMBED_DIMENSIONS`.
 
 ## Code conventions
 

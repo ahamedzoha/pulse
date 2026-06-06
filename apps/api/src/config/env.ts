@@ -37,6 +37,19 @@ export const env = {
 
   jwtSecret: required('JWT_SECRET'),
 
+  dashscope: {
+    apiKey: optional('DASHSCOPE_API_KEY', ''),
+    baseUrl: optional(
+      'DASHSCOPE_BASE_URL',
+      'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+    ),
+    // NOTE: text-embedding-v3 only supports 1024/768/512 dims. The schema is
+    // vector(1536), so we default to text-embedding-v4 which supports 1536.
+    embedModel: optional('EMBED_MODEL', 'text-embedding-v4'),
+    embedDimensions: Number(optional('EMBED_DIMENSIONS', '1536')),
+    llmModel: optional('LLM_MODEL', 'qwen-plus'),
+  },
+
   entra: {
     tenantId: required('ENTRA_TENANT_ID'),
     clientId: required('ENTRA_CLIENT_ID'),

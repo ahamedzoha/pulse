@@ -317,11 +317,11 @@ Use the **international** endpoint (`dashscope-intl.aliyuncs.com`), not the Chin
 | Step | Scope | Status |
 |------|-------|--------|
 | 1 | Docker Compose + schema | Done |
-| 2 | Entra ID setup (tenant, groups, single app registration) — see [`docs/entra-setup.md`](docs/entra-setup.md) | Pending (manual portal) |
+| 2 | Entra ID setup (tenant, groups, single app registration) — see [`docs/entra-setup.md`](docs/entra-setup.md) | Done |
 | 3 | NestJS API skeleton (MSAL OIDC, `/auth/me`, user upsert, passport-jwt, RolesGuard) | Done |
-| 4 | Task CRUD + event emission + BullMQ enqueue | Pending |
-| 5 | BullMQ workers (embed, health, realtime/SSE) | Pending |
-| 6 | RAG query endpoint | Pending |
+| 4 | Task CRUD + event emission + BullMQ enqueue | Done |
+| 5 | BullMQ workers (embed, health cron, realtime/SSE) | Done |
+| 6 | RAG query endpoint (`POST /intel/query`, streaming) — see [`docs/dashscope-setup.md`](docs/dashscope-setup.md) | Done |
 | 7 | Board UI (Kanban, health badges, mood picker) | Pending |
 | 8 | Intel UI (SSE feed, leaderboard, momentum, AI panel) | Pending |
 
