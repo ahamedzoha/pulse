@@ -2,7 +2,7 @@
 
 **Purpose:** A self-contained warm-up build that practices the architectural patterns used in RBDOps AI — event ingestion, queue workers, RAG over activity history, Entra SSO/RBAC — without the complexity of the full client system.
 
-> **Status:** Scaffold — infra, schema, and agent docs in place. Application code not yet implemented.
+> **Status:** Demo POC — Board, Intel, API, workers, and RAG chat are implemented. See [Build Order](#11-build-order).
 
 ---
 
@@ -20,6 +20,7 @@
 10. [Environment Variables](#10-environment-variables)
 11. [Build Order](#11-build-order)
 12. [Connection to RBDOps AI](#12-connection-to-rbdops-ai)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -38,7 +39,7 @@ Every task has a health score (0–100) that degrades when untouched:
 | `review` | 0.5 pts / hour |
 | `done` | 0 (frozen) |
 
-Score floors at 0. Cards shift green → amber → red as health drops. A background worker recomputes scores on a schedule (every 15 min) and on each event.
+Score floors at 0. Cards shift green → amber → red as health drops. Health recomputes **immediately after each task event** (via the queue processor); a **15 min cron** catches anything missed.
 
 ### Mood tagging
 
@@ -131,7 +132,7 @@ flowchart TB
 | Vector store | pgvector | 1536-dim embeddings, HNSW index |
 | Queue | BullMQ + Redis (`@nestjs/bullmq`) | One queue (`task-events`), processors per concern |
 | LLM | DashScope `qwen-plus` | OpenAI-compatible SDK, intl endpoint |
-| Embeddings | DashScope `text-embedding-v3` | 1536 dimensions |
+| Embeddings | DashScope `text-embedding-v4` | 1536 dimensions (`text-embedding-v3` caps at 1024) |
 | Runtime | Docker Compose | Postgres + Redis only |
 | Monorepo | pnpm workspaces | `@pulse/*` packages |
 
@@ -170,6 +171,7 @@ Full DDL in `infra/postgres/init.sql`. Summary:
 | `tasks` | Current task state including `health_score`, `last_activity_at` |
 | `task_events` | Append-only activity log with `mood` |
 | `event_embeddings` | pgvector RAG store (`vector(1536)`, HNSW cosine index) |
+| `intel_chat_turns` | Per-user Intel AI chat history (question, answer, sources) |
 
 Key enums (enforced via CHECK constraints):
 
@@ -190,9 +192,11 @@ User action (Board)
     → INSERT task_events
     → UPDATE tasks.last_activity_at
     → BullMQ job: "task-events"
-      → embed-worker    → DashScope embedding → event_embeddings
-      → health-worker   → recompute health_score
-      → realtime-worker → SSE push to Intel clients
+      → task-events processor (single consumer):
+          → embed event → event_embeddings
+          → recompute health_score for that task
+          → SSE push to Intel clients
+      → (cron every 15 min: bulk health recompute as safety net)
 ```
 
 Health formula: `100 - (hours_since_last_activity × decay_rate)`, floored at 0.
@@ -202,22 +206,38 @@ Health formula: `100 - (hours_since_last_activity × decay_rate)`, floored at 0.
 - **Persistent per-user chat** in `intel_chat_turns` — survives refresh; `GET /intel/chat` hydrates UI
 - Each `POST /intel/query` saves a turn and sends the last 20 completed turns to Qwen as conversation context (plus fresh pgvector RAG context for the new question)
 - Scrollable chat UI — user bubbles + streamed assistant replies with per-turn source citations
-- Suggestion chips on empty state; input **clears after send**
+- Eight **quick-prompt chips** on empty state (grounded in `pnpm seed:demo` data); input **clears after send**
 - **Clear chat** → `DELETE /intel/chat` wipes the user's thread
 - Recent activity feed hydrates via `GET /intel/feed/recent`; SSE adds live events after connect
+- **Expandable task cards** — leaderboard rows, feed items, and AI source citations open a read-only detail drawer (`GET /intel/tasks/:id`)
 
-**Existing DBs:** run `infra/postgres/migrations/001_intel_chat_turns.sql` if the table is missing.
+### Intel AI quick prompts (demo)
+
+After `pnpm seed:demo`, use these chips in the Intel AI panel. Each targets a different capability the platform is meant to showcase:
+
+| Quick prompt | What it demonstrates |
+|--------------|----------------------|
+| What are the biggest bottlenecks right now? | **Cross-task synthesis** — surfaces DB migration timeouts, memory leak, Legal blockers, Redis TLS, and other stalled work in one answer |
+| Which tasks are at critical risk—and why? | **Health + narrative** — ties low `health_score` leaderboard entries to comment/mood context (e.g. sub-40 tasks) |
+| What were our recent sprint wins? | **Positive momentum** — retrieves completed or high-mood wins (API latency fix, rate limiting, Kanban perf, WebSocket failover) |
+| What's blocking the user registration deploy? | **Precise retrieval** — Legal/ToS task and Carol viewer comment thread blocking the registration flow |
+| How was the API latency spike fixed? | **Root-cause storytelling** — `task_events` missing index, 800ms → 45ms resolution |
+| What production alerts came up last night? | **Incident drill-down** — Node worker OOM alerts and uncommitted job loss |
+| What's stuck waiting on Legal, DevOps, or AWS? | **External-dependency map** — Redis cert/AWS support, migration DevOps, translation agency, Legal approval |
+| What needs a Product decision before Friday? | **Urgency + decision support** — onboarding scope creep vs Friday release cutoff |
+
+Chip copy lives in `apps/intel/src/components/AiPanel.tsx` (`SUGGESTIONS`). The seed script runs overlapping RAG smoke tests against the first, third, and fifth prompts.
 
 ### RAG flow
 
 ```
 User question (Intel AI panel)
-  → POST /api/intel/query
-    → Embed question (text-embedding-v3)
+  → POST /intel/query
+    → Load prior chat turns from DB (multi-turn context)
+    → Embed question (text-embedding-v4)
     → pgvector similarity search (top 10, cosine)
-    → Fetch task context for matched events
-    → Prompt Qwen with system + context + question
-    → Stream response to UI
+    → Prompt Qwen with system + history + RAG context + question
+    → Stream response to UI; persist turn in intel_chat_turns
 ```
 
 ---
@@ -228,7 +248,7 @@ Roles map to Entra ID security groups. Group membership arrives in the JWT `grou
 
 | Role | Entra group | Permissions |
 |------|-------------|-------------|
-| `pulse-admin` | pulse-admin | Full Board + Intel, manage users |
+| `pulse-admin` | pulse-admin | Full Board + Intel |
 | `pulse-member` | pulse-member | Create/update tasks, comment, Intel |
 | `pulse-viewer` | pulse-viewer | Intel read-only; no Board writes |
 
@@ -280,13 +300,21 @@ docker compose -f infra/docker-compose.yml exec postgres \
   psql -U pulse -d pulse -c "\dt"
 ```
 
-Start apps (once implemented):
+Start apps:
 
 ```bash
 pnpm dev:api      # http://localhost:4000
 pnpm dev:board    # http://localhost:3000
 pnpm dev:intel    # http://localhost:3001
 ```
+
+Seed realistic demo data (API + DashScope + Docker must be running):
+
+```bash
+pnpm seed:demo
+```
+
+`seed:demo` backdates `last_activity_at` per task so target health scores match the decay formula, then derives `health_score` from the same SQL expression the API workers use. See [Troubleshooting](#13-troubleshooting) if health or demo data looks wrong.
 
 Stop infra:
 
@@ -347,10 +375,130 @@ Use the **international** endpoint (`dashscope-intl.aliyuncs.com`), not the Chin
 | BullMQ workers | Ingestion workers per source (Graph, Asana, etc.) |
 | Health decay score | Project health score (0–100, weighted signals) |
 | Mood tagging | Tone/sentiment on emails + transcripts |
-| embed-worker → pgvector | Event embeddings for RAG over activity |
+| task-events processor → pgvector | Event embeddings for RAG over activity |
 | Intel AI panel | Executive Q&A interface (Phase 2) |
 | Momentum meter | Team workload risk indicator |
 | SSE real-time feed | Executive daily digest / alert feed |
+
+---
+
+## 13. Troubleshooting
+
+Symptom-first fixes for local demo issues. Verify infra and API are up before deeper steps:
+
+```bash
+pnpm infra:up
+pnpm dev:api    # :4000 — workers run inside the API process
+curl -s http://localhost:4000/health
+```
+
+### Health badges all green / score 100
+
+| | |
+|---|---|
+| **Symptom** | Board shows avg health 100, at-risk 0, every card green — often right after seed or after leaving a tab open. |
+| **Cause** | Health is **derived** from `last_activity_at` + status decay, not a static field. Workers recompute after every event; a 15 min cron bulk-recomputes non-done tasks. Fresh seed activity sets `last_activity_at ≈ now` → score ≈ 100 until backdating runs. Board can also show **stale React state** from before a reseed. |
+| **Fix** | 1. Hard-refresh Board (`Cmd+Shift+R`). Board polls every 45s but an old tab may lag.<br>2. Quick DB repair: `pnpm seed:sync-health` (API can stay running).<br>3. Full reset: `pnpm seed:demo` (API + Docker + `DASHSCOPE_API_KEY` required). |
+
+**Verify DB scores:**
+
+```bash
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U pulse -d pulse -c \
+  "SELECT health_score, status, LEFT(title, 40) FROM tasks ORDER BY health_score LIMIT 8;"
+```
+
+Expect a spread (e.g. 10–95), not all 100. After `seed:sync-health`, summary logs `at-risk tasks (health < 40): 4`.
+
+---
+
+### Intel live feed empty or “Offline”
+
+| | |
+|---|---|
+| **Symptom** | “Waiting for activity” / “No activity yet” despite tasks on the Board; red **Offline** badge. |
+| **Cause** | SSE (`GET /intel/feed`) only streams events **after** connect — no history on refresh. **Offline** = EventSource disconnected (API down, CORS, or network). |
+| **Fix** | 1. Ensure API is running on :4000.<br>2. Feed hydrates history via `GET /intel/feed/recent` on load — check Network tab for 401 (sign in again).<br>3. Create or update a task on Board; a new event should appear if SSE is connected.<br>4. Hard-refresh Intel. |
+
+---
+
+### Intel AI errors / weak answers / “Embeddings unavailable”
+
+| | |
+|---|---|
+| **Symptom** | AI panel error, empty sources, or generic “I don't have enough information” answers. |
+| **Cause** | Missing `DASHSCOPE_API_KEY`, wrong endpoint (China vs intl), workers not embedding events, or empty `event_embeddings`. |
+| **Fix** | 1. Set `DASHSCOPE_API_KEY` in `.env`; use intl base URL — see [`docs/dashscope-setup.md`](docs/dashscope-setup.md).<br>2. Restart API after env change.<br>3. Re-seed so workers populate embeddings: `pnpm seed:demo`.<br>4. Check vectors: `SELECT count(*) FROM event_embeddings WHERE embedding IS NOT NULL;` — expect > 0 after seed. |
+
+Demo quick-prompt chips are grounded in `pnpm seed:demo` data — run seed before trying them (see [Intel AI quick prompts](#intel-ai-quick-prompts-demo)).
+
+---
+
+### `pnpm seed:demo` fails or hangs
+
+| | |
+|---|---|
+| **Symptom** | `API not reachable`, embedding wait timeout, or DashScope errors. |
+| **Fix** | 1. `pnpm infra:up` — Postgres + Redis must be healthy.<br>2. `pnpm dev:api` on :4000 before seeding.<br>3. Valid `DASHSCOPE_API_KEY` and `JWT_SECRET` in `.env`.<br>4. If queue stuck: restart API, then `pnpm seed:sync-health` or re-run seed.<br>5. Embedding wait defaults to 180s — slow DashScope can timeout; retry once API workers are idle. |
+
+---
+
+### Sign-in / auth / wrong role
+
+| | |
+|---|---|
+| **Symptom** | Redirect loops, `AADSTS50011`, “Session expired”, or Board blocked for viewer. |
+| **Fix** | See [`docs/entra-setup.md`](docs/entra-setup.md) — redirect URI must match `ENTRA_REDIRECT_URI` exactly (`http://localhost:4000/auth/callback`). Group IDs in `.env` must match Entra security groups. `pulse-viewer` is Intel read-only; Board writes require admin or member. |
+
+---
+
+### `intel_chat_turns` / chat history errors
+
+| | |
+|---|---|
+| **Symptom** | `GET /intel/chat` 500, relation does not exist. |
+| **Fix** | DB created before chat table was added — run migration: `infra/postgres/migrations/001_intel_chat_turns.sql`. New installs get the table from `init.sql`. |
+
+---
+
+### Workers / queue not processing
+
+| | |
+|---|---|
+| **Symptom** | No embeddings, health never updates, Intel feed never gets new SSE events after Board changes. |
+| **Cause** | BullMQ workers run **inside the API process** — if API isn't running, nothing processes `task-events`. Redis down or stale queue keys after manual DB truncate. |
+| **Fix** | 1. Start or restart `pnpm dev:api`.<br>2. `docker compose -f infra/docker-compose.yml ps` — Redis healthy.<br>3. After `TRUNCATE` without clearing Redis, re-run `pnpm seed:demo` (seed clears `bull:task-events:*` keys).<br>4. Check API logs for `TaskEventsProcessor` / `HealthService` errors. |
+
+---
+
+### Useful diagnostic commands
+
+```bash
+# Extensions + tables
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U pulse -d pulse -c "\dt"
+
+# Embedding coverage
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U pulse -d pulse -c \
+  "SELECT count(*) AS events FROM task_events;
+   SELECT count(*) AS vectors FROM event_embeddings WHERE embedding IS NOT NULL;"
+
+# BullMQ wait depth (0 when idle)
+docker compose -f infra/docker-compose.yml exec redis \
+  redis-cli LLEN 'bull:task-events:wait'
+
+# At-risk task count
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U pulse -d pulse -c \
+  "SELECT count(*) FROM tasks WHERE health_score < 40 AND status <> 'done';"
+```
+
+| Command | When to use |
+|---------|-------------|
+| `pnpm seed:sync-health` | Board/Intel health wrong but tasks exist — no full reseed |
+| `pnpm seed:demo` | Empty or stale demo data; (re)build embeddings + RAG smoke tests |
+| `pnpm infra:down` / `pnpm infra:up` | Postgres/Redis wedged — **destroys volume data** on down without backup |
 
 ---
 

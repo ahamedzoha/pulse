@@ -1,16 +1,21 @@
 # @pulse/intel
 
-Pulse Intel — App 2. Intelligence dashboard and RAG Q&A.
+Pulse Intel — App 2. Intelligence dashboard and RAG chat.
 
 **Port:** 3001 (host)  
-**Auth:** redirect to API `GET /auth/login` (backend owns the MSAL OIDC flow)  
+**Auth:** redirect to API `GET /auth/login?app=intel`  
 **Roles:** `pulse-admin`, `pulse-member`, `pulse-viewer` (read-only)
 
-## Planned features
+## Features
 
-- SSE live activity feed
-- Task health leaderboard (lowest scores first)
-- Team momentum meter (24h mood rolling average)
-- AI summary panel with streaming RAG responses
+- SSE live activity feed (+ `feed/recent` hydration on load)
+- Health leaderboard and 24h momentum meter
+- Persistent per-user AI chat (`GET/DELETE /intel/chat`, streaming RAG)
+- Expandable task detail drawer (`GET /intel/tasks/:id`) from leaderboard, feed, and AI sources
+- Eight quick-prompt chips on empty chat (see root README § Intel AI quick prompts)
 
-See root **README.md** build order step 8.
+```bash
+pnpm dev:intel
+```
+
+Set `NEXT_PUBLIC_API_URL` in `.env.local` (see root `.env.example`).

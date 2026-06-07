@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fetchRecentFeed, type FeedItem } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { Panel } from './Panel';
+import { useTaskDetail } from './TaskDetailContext';
 
 const eventLabels: Record<FeedItem['eventType'], string> = {
   created: 'created',
@@ -70,6 +71,7 @@ function FeedIcon() {
 }
 
 export function ActivityFeed() {
+  const { openTask } = useTaskDetail();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
@@ -145,33 +147,43 @@ export function ActivityFeed() {
     >
       <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
         {items.map((item) => (
-          <li
-            key={item.id}
-            className={`rounded-xl border px-3 py-2.5 text-sm transition-all duration-300 ${
-              flashId === item.id
-                ? 'border-pulse-accent/40 bg-pulse-accent/10 shadow-lg shadow-pulse-accent/10'
-                : 'border-white/5 bg-pulse-bg/50 hover:border-white/12 hover:bg-pulse-bg/70'
-            }`}
-          >
-            <div className="flex gap-2.5">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/6 text-pulse-muted">
-                {eventIcons[item.eventType]}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="leading-snug text-slate-200">{formatItem(item)}</p>
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-pulse-muted">
-                  <span className="capitalize">{eventLabels[item.eventType]}</span>
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 font-medium capitalize ring-1 ring-inset ${moodColors[item.mood]}`}
-                  >
-                    {item.mood}
-                  </span>
-                  <time dateTime={item.occurredAt}>
-                    {new Date(item.occurredAt).toLocaleTimeString()}
-                  </time>
+          <li key={item.id}>
+            <button
+              type="button"
+              onClick={() => openTask(item.taskId)}
+              className={`pulse-card-expandable group w-full rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-300 ${
+                flashId === item.id
+                  ? 'border-pulse-accent/40 bg-pulse-accent/10 shadow-lg shadow-pulse-accent/10'
+                  : 'border-white/5 bg-pulse-bg/50 hover:border-pulse-accent/25 hover:bg-pulse-bg/70'
+              }`}
+              aria-label={`View task details for ${item.taskTitle}`}
+            >
+              <div className="flex gap-2.5">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/6 text-pulse-muted">
+                  {eventIcons[item.eventType]}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="leading-snug text-slate-200">{formatItem(item)}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-pulse-muted">
+                    <span className="capitalize">{eventLabels[item.eventType]}</span>
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 font-medium capitalize ring-1 ring-inset ${moodColors[item.mood]}`}
+                    >
+                      {item.mood}
+                    </span>
+                    <time dateTime={item.occurredAt}>
+                      {new Date(item.occurredAt).toLocaleTimeString()}
+                    </time>
+                    <span className="ml-auto flex items-center gap-0.5 font-medium text-pulse-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      Task
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </button>
           </li>
         ))}
         {items.length === 0 && (

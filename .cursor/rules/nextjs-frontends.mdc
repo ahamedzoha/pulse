@@ -35,7 +35,8 @@ Auth gate screens (`AuthScreen`) must always offer **Sign out** (`GET /auth/logo
 - Live activity feed via SSE (no polling)
 - Health leaderboard: tasks sorted by `health_score` ASC
 - Momentum meter: rolling average mood over last 24h
-- AI panel: persistent per-user chat (`intel_chat_turns`) — `GET /intel/chat` hydrates on load, `POST /intel/query` streams RAG answers and saves turns, prior turns included in LLM context; `DELETE /intel/chat` clears history; scrollable chat UI with source citations; input clears after send
+- AI panel: persistent per-user chat (`intel_chat_turns`) — `GET /intel/chat` hydrates on load, `POST /intel/query` streams RAG answers and saves turns, prior turns included in LLM context; `DELETE /intel/chat` clears history; scrollable chat UI with source citations; eight seed-grounded quick-prompt chips (`SUGGESTIONS` in `AiPanel.tsx`, documented in root README); input clears after send
+- Task detail drawer: `GET /intel/tasks/:id` — clickable leaderboard rows, feed items, AI source cards
 
 ## Conventions
 

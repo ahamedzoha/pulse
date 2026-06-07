@@ -9,7 +9,7 @@ export class QueueService {
     @InjectQueue(QUEUES.TASK_EVENTS) private readonly queue: Queue,
   ) {}
 
-  /** Enqueue a canonical task event for the embed/health/realtime workers. */
+  /** Enqueue a canonical task event for embed + health recompute + SSE broadcast. */
   async enqueueTaskEvent(event: TaskEvent): Promise<void> {
     await this.queue.add(event.eventType, event, {
       removeOnComplete: true,

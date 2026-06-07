@@ -13,7 +13,7 @@ apps/api/src/
   auth/          # MSAL OIDC flow, passport-jwt session strategy, RolesGuard
   tasks/         # CRUD, status changes, comments, reassignment
   events/        # task_events persistence + BullMQ enqueue
-  workers/       # embed, health, realtime processors (@nestjs/bullmq)
+  workers/       # task-events processor + health cron (@nestjs/bullmq)
   intel/         # SSE feed, leaderboard, momentum, RAG query
   common/        # guards, decorators, filters
 ```
@@ -67,22 +67,23 @@ Every mutation: INSERT `task_events` → UPDATE `tasks.last_activity_at` → enq
 
 ## Workers (`@nestjs/bullmq`)
 
-`BullModule.forRoot({ connection })` + `registerQueue({ name: QUEUES.TASK_EVENTS })`. Each worker is a `@Processor` extending `WorkerHost`:
+`BullModule.forRoot({ connection })` + `registerQueue({ name: QUEUES.TASK_EVENTS })`. One `@Processor` extends `WorkerHost` (separate processors on the same queue would compete for jobs):
 
 ```typescript
 @Processor(QUEUES.TASK_EVENTS)
-export class EmbedProcessor extends WorkerHost {
+export class TaskEventsProcessor extends WorkerHost {
   async process(job: Job<TaskEvent>) {
-    // build content_text → DashScope embed → INSERT event_embeddings
+    // enrich → embed → recomputeForTask(taskId) → realtime.broadcast
   }
 }
 ```
 
-| Processor | Action |
-|-----------|--------|
+| Step | Action |
+|------|--------|
 | Embed | content_text → DashScope embed → `event_embeddings` |
-| Health | `100 - (hours × decay_rate)`, floor 0; also `@Cron('*/15 * * * *')` |
+| Health | `HealthService.recomputeForTask(taskId)` after each event |
 | Realtime | push event into the SSE stream (below) |
+| Cron | `HealthService.recomputeAll()` every 15 min — safety net |
 
 ## SSE realtime (Intel feed)
 
@@ -109,7 +110,7 @@ No reconnect/persistence logic — POC scope.
 
 ## RAG endpoint
 
-`POST /api/intel/query`: embed question → pgvector cosine top-10 → fetch task context → Qwen stream.
+`POST /intel/query`: load chat history → embed question → pgvector top-10 → Qwen stream with history + RAG context → persist `intel_chat_turns`.
 
 ## DashScope client
 

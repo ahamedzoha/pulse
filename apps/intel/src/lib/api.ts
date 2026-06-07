@@ -1,6 +1,7 @@
 import type {
   ActivityFeedItem,
   IntelChatTurn,
+  IntelTaskDetail,
   Role,
 } from '@pulse/shared-types';
 import { API_URL } from './config';
@@ -64,6 +65,10 @@ export function fetchMe(): Promise<User> {
 
 export function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   return apiFetch('/intel/leaderboard');
+}
+
+export function fetchTaskDetail(taskId: string): Promise<IntelTaskDetail> {
+  return apiFetch(`/intel/tasks/${taskId}`);
 }
 
 export function fetchMomentum(): Promise<MomentumSnapshot> {

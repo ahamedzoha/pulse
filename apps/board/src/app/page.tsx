@@ -68,6 +68,15 @@ export default function BoardPage() {
       .finally(() => setLoading(false));
   }, [refresh]);
 
+  // Health decays server-side; Board only loaded once on mount without this.
+  useEffect(() => {
+    if (!user || gate !== 'none') return;
+    const id = setInterval(() => {
+      void refresh();
+    }, 45_000);
+    return () => clearInterval(id);
+  }, [user, gate, refresh]);
+
   const assigneeNames = useMemo(
     () => Object.fromEntries(users.map((u) => [u.id, u.display_name])),
     [users],

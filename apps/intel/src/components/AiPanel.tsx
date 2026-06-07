@@ -10,12 +10,18 @@ import {
 } from '@/lib/api';
 import { FormattedAnswer } from '@/lib/format-answer';
 import { Spinner } from './Spinner';
+import { useTaskDetail } from './TaskDetailContext';
 
+/** Grounded in seed-demo scenarios — each chip targets a distinct Intel/RAG demo angle. */
 const SUGGESTIONS = [
-  "What's the current status of the project?",
-  'Which tasks are at risk or have low health?',
-  'What caused the Entra login redirect issue?',
-  'Summarize recent team activity',
+  'What are the biggest bottlenecks right now?',
+  'Which tasks are at critical risk—and why?',
+  'What were our recent sprint wins?',
+  "What's blocking the user registration deploy?",
+  'How was the API latency spike fixed?',
+  'What production alerts came up last night?',
+  "What's stuck waiting on Legal, DevOps, or AWS?",
+  'What needs a Product decision before Friday?',
 ];
 
 const STATUS_STYLES: Record<string, string> = {
@@ -52,36 +58,58 @@ function statusLabel(s: string) {
 }
 
 function SourceCard({ source, index }: { source: RagSource; index: number }) {
+  const { openTask } = useTaskDetail();
   const pct = Math.round(source.score * 100);
   const style = STATUS_STYLES[source.status] ?? STATUS_STYLES.todo;
 
   return (
-    <li className="group rounded-lg border border-white/5 bg-pulse-bg/70 p-3 transition hover:border-pulse-accent/30 hover:bg-pulse-bg">
-      <div className="mb-1.5 flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <span className="mr-2 text-[10px] font-medium tabular-nums text-pulse-muted">
-            #{index + 1}
+    <li>
+      <button
+        type="button"
+        onClick={() =>
+          openTask(source.taskId, {
+            contentText: source.contentText,
+            score: source.score,
+            label: 'RAG source match',
+          })
+        }
+        className="pulse-card-expandable group w-full rounded-lg border border-white/5 bg-pulse-bg/70 p-3 text-left transition hover:border-pulse-accent/35 hover:bg-pulse-bg hover:shadow-md hover:shadow-pulse-accent/10"
+        aria-label={`View full details for ${source.title}`}
+      >
+        <div className="mb-1.5 flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="mr-2 text-[10px] font-medium tabular-nums text-pulse-muted">
+              #{index + 1}
+            </span>
+            <span className="text-xs font-medium text-slate-200 group-hover:text-white">
+              {source.title}
+            </span>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ring-1 ring-inset ${style}`}
+          >
+            {statusLabel(source.status)}
           </span>
-          <span className="text-xs font-medium text-slate-200">{source.title}</span>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ring-1 ring-inset ${style}`}
-        >
-          {statusLabel(source.status)}
-        </span>
-      </div>
-      <p className="line-clamp-2 text-[11px] leading-snug text-pulse-muted">
-        {source.contentText}
-      </p>
-      <div className="mt-2 flex items-center gap-2">
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/5">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-pulse-accent/60 to-violet-400/80"
-            style={{ width: `${pct}%` }}
-          />
+        <p className="line-clamp-2 text-[11px] leading-snug text-pulse-muted group-hover:text-slate-300">
+          {source.contentText}
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/5">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-pulse-accent/60 to-violet-400/80"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-pulse-muted">{pct}%</span>
+          <span className="flex items-center gap-0.5 text-[10px] font-medium text-pulse-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            Expand
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+            </svg>
+          </span>
         </div>
-        <span className="text-[10px] tabular-nums text-pulse-muted">{pct}% match</span>
-      </div>
+      </button>
     </li>
   );
 }
@@ -96,14 +124,11 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
-function AssistantBubble({ turn, isLatest }: { turn: ChatTurn; isLatest: boolean }) {
-  const [sourcesOpen, setSourcesOpen] = useState(isLatest);
+function AssistantBubble({ turn }: { turn: ChatTurn }) {
+  const isStreaming = turn.status === 'streaming';
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
-  useEffect(() => {
-    if (isLatest && turn.sources.length > 0) setSourcesOpen(true);
-  }, [isLatest, turn.sources.length]);
-
-  const thinking = turn.status === 'streaming' && !turn.answer && !turn.error;
+  const thinking = isStreaming && !turn.answer && !turn.error;
 
   return (
     <div className="flex gap-2.5">
@@ -126,7 +151,9 @@ function AssistantBubble({ turn, isLatest }: { turn: ChatTurn; isLatest: boolean
           </div>
         ) : (
           <>
-            {turn.answer ? <FormattedAnswer text={turn.answer} /> : null}
+            {turn.answer ? (
+              <FormattedAnswer text={turn.answer} sources={turn.sources} />
+            ) : null}
             {turn.status === 'streaming' && turn.answer && (
               <span className="mt-1 inline-block h-4 w-0.5 animate-pulse bg-pulse-accent" />
             )}
@@ -135,34 +162,45 @@ function AssistantBubble({ turn, isLatest }: { turn: ChatTurn; isLatest: boolean
 
         {turn.sources.length > 0 && (
           <div className="mt-3 border-t border-white/6 pt-3">
-            <button
-              type="button"
-              onClick={() => setSourcesOpen((o) => !o)}
-              className="flex w-full cursor-pointer items-center justify-between rounded-lg px-1 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-pulse-muted transition-colors duration-200 hover:text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent"
-            >
-              <span>
-                Sources
-                <span className="ml-2 rounded-full bg-white/8 px-1.5 py-0.5 tabular-nums text-slate-400">
+            {isStreaming ? (
+              <p className="flex items-center gap-2 px-1 text-[10px] text-pulse-muted">
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/8 text-[9px] tabular-nums text-slate-400">
                   {turn.sources.length}
                 </span>
-              </span>
-              <svg
-                className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${sourcesOpen ? 'rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-              </svg>
-            </button>
-            {sourcesOpen && (
-              <ul className="mt-2 space-y-2">
-                {turn.sources.slice(0, 6).map((s, i) => (
-                  <SourceCard key={`${s.taskId}-${i}`} source={s} index={i} />
-                ))}
-              </ul>
+                Sources retrieved — expand when the answer finishes
+              </p>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSourcesOpen((o) => !o)}
+                  className="flex w-full cursor-pointer items-center justify-between rounded-lg px-1 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-pulse-muted transition-colors duration-200 hover:text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent"
+                >
+                  <span>
+                    Sources
+                    <span className="ml-2 rounded-full bg-white/8 px-1.5 py-0.5 tabular-nums text-slate-400">
+                      {turn.sources.length}
+                    </span>
+                  </span>
+                  <svg
+                    className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${sourcesOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-hidden
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {sourcesOpen && (
+                  <ul className="mt-2 space-y-2">
+                    {turn.sources.slice(0, 6).map((s, i) => (
+                      <SourceCard key={`${s.taskId}-${i}`} source={s} index={i} />
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </div>
         )}
@@ -177,14 +215,33 @@ export function AiPanel() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const latestTurnRef = useRef<HTMLDivElement>(null);
+  const stickToStreamRef = useRef(true);
+  const prevTurnCountRef = useRef(0);
   const activeTurnRef = useRef<string | null>(null);
 
-  const scrollToBottom = (smooth = true) => {
-    bottomRef.current?.scrollIntoView({
+  const isNearBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+  };
+
+  const scrollToLatest = (smooth = false) => {
+    const container = scrollRef.current;
+    const turn = latestTurnRef.current;
+    if (!container || !turn) return;
+
+    const turnBottom = turn.offsetTop + turn.offsetHeight;
+    const padding = 16;
+    container.scrollTo({
+      top: Math.max(0, turnBottom - container.clientHeight + padding),
       behavior: smooth ? 'smooth' : 'auto',
-      block: 'end',
     });
+  };
+
+  const followStream = () => {
+    if (!stickToStreamRef.current) return;
+    scrollToLatest(false);
   };
 
   useEffect(() => {
@@ -197,8 +254,34 @@ export function AiPanel() {
   }, []);
 
   useEffect(() => {
-    if (!loadingHistory) scrollToBottom(turns.length > 0);
-  }, [turns, loadingHistory]);
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      stickToStreamRef.current = isNearBottom();
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (loadingHistory) return;
+
+    if (turns.length > prevTurnCountRef.current) {
+      stickToStreamRef.current = true;
+      requestAnimationFrame(() => scrollToLatest(false));
+    } else if (turns.length > 0 && prevTurnCountRef.current === 0) {
+      requestAnimationFrame(() => scrollToLatest(false));
+    }
+    prevTurnCountRef.current = turns.length;
+  }, [turns.length, loadingHistory]);
+
+  const latestTurn = turns[turns.length - 1];
+  const isStreaming = busy || latestTurn?.status === 'streaming';
+
+  useEffect(() => {
+    if (!isStreaming || loadingHistory) return;
+    followStream();
+  }, [latestTurn?.answer, latestTurn?.sources.length, isStreaming, loadingHistory]);
 
   const patchTurn = (id: string, patch: Partial<ChatTurn>) => {
     setTurns((prev) =>
@@ -215,6 +298,7 @@ export function AiPanel() {
 
     const optimisticId = crypto.randomUUID();
     activeTurnRef.current = optimisticId;
+    stickToStreamRef.current = true;
     setTurns((prev) => [
       ...prev,
       {
@@ -226,6 +310,7 @@ export function AiPanel() {
         status: 'streaming',
       },
     ]);
+    requestAnimationFrame(() => scrollToLatest(false));
 
     let turnId = optimisticId;
 
@@ -357,17 +442,17 @@ export function AiPanel() {
           {!loadingHistory && turns.length > 0 && (
             <div className="space-y-5">
               {turns.map((turn, i) => (
-                <div key={turn.id} className="space-y-3">
+                <div
+                  key={turn.id}
+                  ref={i === turns.length - 1 ? latestTurnRef : undefined}
+                  className="space-y-3"
+                >
                   <UserBubble text={turn.question} />
-                  <AssistantBubble
-                    turn={turn}
-                    isLatest={i === turns.length - 1}
-                  />
+                  <AssistantBubble turn={turn} />
                 </div>
               ))}
             </div>
           )}
-          <div ref={bottomRef} className="h-px shrink-0" aria-hidden />
         </div>
 
         <form

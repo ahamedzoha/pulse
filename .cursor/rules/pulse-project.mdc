@@ -28,7 +28,7 @@ Read **README.md** and **AGENTS.md** before implementing. This is a **demo/learn
 - Every task mutation writes `task_events` (append-only) and enqueues BullMQ `task-events`
 - Health decay: todo=2/hr, in_progress=1/hr, review=0.5/hr, done=0; floor at 0
 - Moods: `high` | `medium` | `low` | `neutral` on every update
-- Embeddings: `text-embedding-v3`, 1536 dims → `event_embeddings.embedding vector(1536)`
+- Embeddings: `text-embedding-v4`, 1536 dims → `event_embeddings.embedding vector(1536)`
 - Roles: `pulse-admin` | `pulse-member` | `pulse-viewer` from Entra group IDs in env
 
 ## Code style

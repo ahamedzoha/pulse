@@ -10,8 +10,9 @@ import {
   type TaskStatus,
 } from '@pulse/shared-types';
 import { DatabaseService } from '../database/database.service';
-import { EmbedService } from './embed.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { EmbedService } from './embed.service';
+import { HealthService } from './health.service';
 
 interface EnrichRow {
   task_title: string;
@@ -21,8 +22,8 @@ interface EnrichRow {
 
 /**
  * Single consumer of the `task-events` queue. BullMQ delivers each job to one
- * worker, so embed + realtime broadcast share this processor (separate
- * @Processor classes on the same queue would compete for jobs).
+ * worker, so embed + health recompute + realtime broadcast share this
+ * processor (separate @Processor classes on the same queue would compete).
  */
 @Processor(QUEUES.TASK_EVENTS)
 export class TaskEventsProcessor extends WorkerHost {
@@ -31,6 +32,7 @@ export class TaskEventsProcessor extends WorkerHost {
   constructor(
     private readonly db: DatabaseService,
     private readonly embed: EmbedService,
+    private readonly health: HealthService,
     private readonly realtime: RealtimeService,
   ) {
     super();
@@ -64,6 +66,7 @@ export class TaskEventsProcessor extends WorkerHost {
     };
 
     await this.embed.embedEvent(item);
+    await this.health.recomputeForTask(event.taskId);
     this.realtime.broadcast(item);
   }
 }

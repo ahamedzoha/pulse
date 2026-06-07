@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   INTEL_CHAT_LLM_HISTORY_LIMIT,
   MOOD_WEIGHTS,
@@ -6,6 +6,8 @@ import {
   type EventType,
   type IntelChatSource,
   type IntelChatTurn,
+  type IntelTaskDetail,
+  type IntelTaskEvent,
   type Mood,
   type TaskStatus,
 } from '@pulse/shared-types';
@@ -97,6 +99,80 @@ export class IntelService {
       taskStatus: r.task_status,
       actorName: r.actor_name,
     }));
+  }
+
+  /** Read-only task detail for Intel expandable cards (all authenticated roles). */
+  async taskDetail(taskId: string): Promise<IntelTaskDetail> {
+    const { rows: taskRows } = await this.db.query<{
+      id: string;
+      title: string;
+      description: string | null;
+      status: TaskStatus;
+      health_score: number;
+      created_at: Date;
+      updated_at: Date;
+      last_activity_at: Date;
+      assignee_name: string | null;
+      creator_name: string;
+    }>(
+      `SELECT t.id, t.title, t.description, t.status, t.health_score,
+              t.created_at, t.updated_at, t.last_activity_at,
+              assignee.display_name AS assignee_name,
+              creator.display_name AS creator_name
+         FROM tasks t
+         JOIN users creator ON creator.id = t.created_by
+         LEFT JOIN users assignee ON assignee.id = t.assignee_id
+        WHERE t.id = $1`,
+      [taskId],
+    );
+
+    const task = taskRows[0];
+    if (!task) throw new NotFoundException('Task not found');
+
+    const { rows: eventRows } = await this.db.query<{
+      id: string;
+      event_type: EventType;
+      old_value: string | null;
+      new_value: string | null;
+      comment_text: string | null;
+      mood: Mood;
+      occurred_at: Date;
+      actor_name: string;
+    }>(
+      `SELECT te.id, te.event_type, te.old_value, te.new_value, te.comment_text,
+              te.mood, te.occurred_at, u.display_name AS actor_name
+         FROM task_events te
+         JOIN users u ON u.id = te.actor_id
+        WHERE te.task_id = $1
+        ORDER BY te.occurred_at DESC
+        LIMIT 50`,
+      [taskId],
+    );
+
+    const events: IntelTaskEvent[] = eventRows.map((r) => ({
+      id: r.id,
+      eventType: r.event_type,
+      actorName: r.actor_name,
+      oldValue: r.old_value ?? undefined,
+      newValue: r.new_value ?? undefined,
+      commentText: r.comment_text ?? undefined,
+      mood: r.mood,
+      occurredAt: r.occurred_at.toISOString(),
+    }));
+
+    return {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      healthScore: task.health_score,
+      assigneeName: task.assignee_name,
+      creatorName: task.creator_name,
+      createdAt: task.created_at.toISOString(),
+      updatedAt: task.updated_at.toISOString(),
+      lastActivityAt: task.last_activity_at.toISOString(),
+      events,
+    };
   }
 
   /** Tasks sorted by health_score ASC (lowest / most at-risk first). */

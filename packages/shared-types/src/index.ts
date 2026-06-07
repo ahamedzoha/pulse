@@ -87,6 +87,33 @@ export interface IntelChatTurn {
 /** Max prior turns sent to the LLM as conversation context */
 export const INTEL_CHAT_LLM_HISTORY_LIMIT = 20;
 
+/** Task event row for Intel task detail drawer */
+export interface IntelTaskEvent {
+  id: string;
+  eventType: EventType;
+  actorName: string;
+  oldValue?: string;
+  newValue?: string;
+  commentText?: string;
+  mood: Mood;
+  occurredAt: string;
+}
+
+/** Full task detail for Intel expandable cards (read-only) */
+export interface IntelTaskDetail {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  healthScore: number;
+  assigneeName: string | null;
+  creatorName: string;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+  events: IntelTaskEvent[];
+}
+
 // Worker pattern: TaskEvent payload is minimal. Workers JOIN tasks + users
 // tables to enrich context (title, status, actor name) when building embeddings
 // or computing health scores. Queue stays lean; workers read current state.

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/api';
 import { healthBarClasses, healthColor } from '@/lib/health';
 import { Panel } from './Panel';
+import { useTaskDetail } from './TaskDetailContext';
 
 const STATUS_STYLES: Record<string, string> = {
   done: 'text-emerald-400',
@@ -29,6 +30,7 @@ function LeaderboardIcon() {
 }
 
 export function Leaderboard() {
+  const { openTask } = useTaskDetail();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
 
   const load = () => fetchLeaderboard().then(setEntries).catch(() => {});
@@ -51,10 +53,13 @@ export function Leaderboard() {
           const statusClass = STATUS_STYLES[e.status] ?? 'text-slate-400';
           const rankClass = i < 3 ? RANK_STYLES[i] : 'text-pulse-muted';
           return (
-            <li
-              key={e.id}
-              className="group rounded-xl border border-white/5 bg-pulse-bg/60 px-3 py-2.5 transition-all duration-200 hover:border-white/12 hover:bg-pulse-bg/90"
-            >
+            <li key={e.id}>
+              <button
+                type="button"
+                onClick={() => openTask(e.id)}
+                className="pulse-card-expandable group w-full rounded-xl border border-white/5 bg-pulse-bg/60 px-3 py-2.5 text-left transition-all duration-200 hover:border-pulse-accent/25 hover:bg-pulse-bg/90 hover:shadow-md hover:shadow-pulse-accent/5"
+                aria-label={`View details for ${e.title}`}
+              >
               <div className="mb-1.5 flex items-start justify-between gap-2">
                 <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-slate-200">
                   <span className={`mr-1.5 font-bold tabular-nums ${rankClass}`}>
@@ -80,12 +85,21 @@ export function Leaderboard() {
                   style={{ width: `${e.healthScore}%` }}
                 />
               </div>
-              <p className={`mt-1.5 text-[10px] capitalize ${statusClass}`}>
-                {e.status.replace(/_/g, ' ')}
-                {e.assigneeName ? (
-                  <span className="text-pulse-muted"> · {e.assigneeName}</span>
-                ) : null}
-              </p>
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <p className={`text-[10px] capitalize ${statusClass}`}>
+                  {e.status.replace(/_/g, ' ')}
+                  {e.assigneeName ? (
+                    <span className="text-pulse-muted"> · {e.assigneeName}</span>
+                  ) : null}
+                </p>
+                <span className="flex items-center gap-0.5 text-[10px] font-medium text-pulse-muted opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  Details
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                  </svg>
+                </span>
+              </div>
+              </button>
             </li>
           );
         })}

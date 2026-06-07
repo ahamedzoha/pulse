@@ -16,7 +16,7 @@ This file is the **on-ramp** for AI agents working in this repo. **Authoritative
 
 | Priority | File | When to read |
 |----------|------|--------------|
-| 1 | **README.md** | Architecture, build order, ports, env vars, event/RAG flows |
+| 1 | **README.md** | Architecture, build order, ports, env vars, event/RAG flows, **§13 Troubleshooting** |
 | 2 | **infra/postgres/init.sql** | Schema, enums, pgvector dimensions (1536) |
 | 3 | **.env.example** | All required environment variables |
 | 4 | **packages/shared-types/** | Canonical `TaskEvent`, mood enum, DTOs |
@@ -61,8 +61,8 @@ pulse/
 2. Entra ID — tenant (Free tier OK), groups, single app registration — see `docs/entra-setup.md`
 3. NestJS API — AuthModule, RolesGuard, `/auth/me`, user upsert
 4. Task CRUD + event emission → `task_events` + BullMQ `task-events` queue
-5. Workers — `embed-worker`, `health-worker` (cron 15 min), `realtime-worker` (SSE)
-6. RAG — `POST /api/intel/query` (embed → pgvector → Qwen stream)
+5. Workers — single `task-events` processor (embed + per-task health recompute + SSE); health cron (15 min) as safety net
+6. RAG — `POST /intel/query` (embed → pgvector → Qwen stream + chat persistence)
 7. Board UI — Kanban, health badges, mood picker
 8. Intel UI — SSE feed, leaderboard, momentum meter, AI chat panel (scrollable session history)
 
@@ -77,7 +77,7 @@ pulse/
 | `review` | 0.5 pts / hour |
 | `done` | 0 (frozen) |
 
-Formula: `100 - (hours_since_last_activity × decay_rate)`, floor at 0. Badge colors: green >70, amber 40–70, red <40.
+Formula: `100 - (hours_since_last_activity × decay_rate)`, floor at 0. Badge colors: green >70, amber 40–70, red <40. Recomputes immediately after each task event (processor); cron every 15 min catches stragglers.
 
 ### Mood tags (on every task update)
 
@@ -106,18 +106,32 @@ Workers JOIN `tasks` + `users` by `taskId`/`actorId` to enrich context — queue
 
 ### SSE realtime (Intel feed)
 
-Simple EventEmitter pattern in `realtime-worker`. Intel endpoint: `GET /api/intel/feed` — SSE stream, no reconnect logic (POC scope).
+Simple EventEmitter pattern in the task-events processor. Intel endpoint: `GET /intel/feed` — SSE stream (unauthenticated POC); `GET /intel/feed/recent` hydrates history on load. No reconnect logic (POC scope).
 
 ### RAG flow
 
-Question → DashScope `text-embedding-v3` → pgvector cosine search (top 10) → Qwen prompt with context → stream response.
+Question → DashScope `text-embedding-v4` → pgvector cosine search (top 10) → Qwen prompt with prior chat turns + RAG context → stream response; persist in `intel_chat_turns`.
 
 ### Intel AI panel (chat UX)
 
 - **DB-backed per user** (`intel_chat_turns`): `GET /intel/chat` on load, `DELETE /intel/chat` to clear
 - Each query persists a turn; prior turns (up to `INTEL_CHAT_LLM_HISTORY_LIMIT`) are sent to Qwen as multi-turn context alongside RAG retrieval for the new question
-- Chat-style scrollable UI; input clears on send; quick-prompt chips do not leave text in the textarea
+- Chat-style scrollable UI; input clears on send; eight quick-prompt chips on empty state (`SUGGESTIONS` in `AiPanel.tsx`) — grounded in `pnpm seed:demo` data
+- Expandable task detail drawer: `GET /intel/tasks/:id` from leaderboard, feed, and AI source cards
 - Feed hydration: `GET /intel/feed/recent` loads activity on load; SSE streams only new events after connect
+
+**Intel AI demo chips** (require seeded data):
+
+| Prompt | Demonstrates |
+|--------|----------------|
+| What are the biggest bottlenecks right now? | Cross-task synthesis |
+| Which tasks are at critical risk—and why? | Health score + comment context |
+| What were our recent sprint wins? | High-mood / completed work |
+| What's blocking the user registration deploy? | Legal/ToS blocker retrieval |
+| How was the API latency spike fixed? | Root-cause narrative |
+| What production alerts came up last night? | Production incident thread |
+| What's stuck waiting on Legal, DevOps, or AWS? | External dependency map |
+| What needs a Product decision before Friday? | Release urgency / scope decision |
 
 ### DashScope client
 
@@ -155,7 +169,11 @@ pnpm infra:up                 # postgres + redis
 pnpm dev:api                  # NestJS on :4000
 pnpm dev:board                # Next.js on :3000
 pnpm dev:intel                # Next.js on :3001
+pnpm seed:demo                # demo tasks + embeddings + health targets
+pnpm seed:sync-health         # repair health scores without full reseed
 ```
+
+Local issues (health all 100, empty feed, RAG/embed failures, auth): **README.md §13 Troubleshooting**.
 
 Verify infra:
 

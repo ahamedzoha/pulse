@@ -4,6 +4,8 @@ import {
   Delete,
   Get,
   MessageEvent,
+  Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Res,
@@ -64,6 +66,13 @@ export class IntelController {
   @UseGuards(JwtAuthGuard)
   leaderboard() {
     return this.intel.leaderboard();
+  }
+
+  /** Read-only task detail for expandable Intel cards. All authenticated roles. */
+  @Get('tasks/:id')
+  @UseGuards(JwtAuthGuard)
+  taskDetail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.intel.taskDetail(id);
   }
 
   /** Team momentum meter — 24h rolling mood average. All authenticated roles. */

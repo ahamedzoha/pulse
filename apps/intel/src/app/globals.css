@@ -57,6 +57,26 @@
   .pulse-fade-in {
     animation: pulse-fade-in 0.35s ease-out both;
   }
+
+  .pulse-drawer-in {
+    animation: pulse-drawer-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .pulse-card-expandable {
+    @apply cursor-pointer transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent;
+  }
+
+  .pulse-answer-citation {
+    @apply inline-flex cursor-pointer items-center rounded-md bg-pulse-accent/12 px-1.5 py-px text-[11px] font-semibold tabular-nums text-pulse-glow ring-1 ring-pulse-accent/30 transition-all duration-200 hover:-translate-y-px hover:bg-pulse-accent/22 hover:ring-pulse-accent/55 hover:shadow-sm hover:shadow-pulse-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent;
+  }
+
+  .pulse-answer-tasklink {
+    @apply inline cursor-pointer rounded-sm border-b border-dotted border-pulse-accent/45 font-medium text-violet-200 transition-all duration-200 hover:border-pulse-accent hover:bg-pulse-accent/8 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent;
+  }
+
+  .pulse-answer-quote {
+    @apply relative my-1 rounded-r-xl border-l-2 border-pulse-accent/55 bg-gradient-to-r from-pulse-accent/10 via-pulse-accent/5 to-transparent py-2.5 pl-4 pr-3 text-sm leading-relaxed text-slate-300;
+  }
 }
 
 @keyframes pulse-fade-in {
@@ -76,8 +96,20 @@
   }
 }
 
+@keyframes pulse-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .pulse-fade-in {
+  .pulse-fade-in,
+  .pulse-drawer-in {
     animation: none;
   }
 
