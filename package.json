@@ -12,7 +12,8 @@
     "typecheck": "pnpm -r typecheck",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
-    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f"
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "seed:demo": "node scripts/seed-demo.mjs"
   },
   "engines": {
     "node": ">=22"

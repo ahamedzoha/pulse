@@ -42,4 +42,11 @@ export class UsersService {
     );
     return rows[0] ?? null;
   }
+
+  async listAll(): Promise<Pick<UserRow, 'id' | 'display_name' | 'email' | 'role'>[]> {
+    const { rows } = await this.db.query<
+      Pick<UserRow, 'id' | 'display_name' | 'email' | 'role'>
+    >(`SELECT id, display_name, email, role FROM users ORDER BY display_name`);
+    return rows;
+  }
 }

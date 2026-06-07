@@ -122,9 +122,17 @@ Pulse uses **one** app registration; the NestJS API is the OIDC relying party fo
 3. **Copy the secret _Value_ immediately** (not the Secret ID — it's shown only once).
    → `.env`: `ENTRA_CLIENT_SECRET`
 
-### 4b. (If you add extra redirect URIs)
+### 4b. Add the logout redirect URI (required for Sign out)
 
-Only the API callback is required. Add more under **Manage → Authentication → Web → Redirect URIs** if needed. No implicit/hybrid flow is required — Pulse uses the **authorization code flow** (MSAL confidential client), so leave "Access tokens"/"ID tokens" implicit-grant checkboxes **unchecked**.
+Federated sign-out redirects back through the API. Add a **second** Web redirect URI under **Manage → Authentication → Web → Redirect URIs**:
+
+```
+http://localhost:4000/auth/logged-out
+```
+
+Without this URI, **Sign out** may fail or bounce to an Entra error page because `post_logout_redirect_uri` must match a registered redirect.
+
+No implicit/hybrid flow is required — Pulse uses the **authorization code flow** (MSAL confidential client), so leave "Access tokens"/"ID tokens" implicit-grant checkboxes **unchecked**.
 
 ---
 
@@ -204,6 +212,7 @@ Sign in as Bob → `pulse-member`, Carol → `pulse-viewer`.
 | Symptom | Cause / fix |
 |---------|-------------|
 | `AADSTS50011` redirect mismatch | Redirect URI in Entra ≠ `ENTRA_REDIRECT_URI`. Must match exactly incl. port. |
+| Sign out loops back signed-in / wrong user | Add `http://localhost:4000/auth/logged-out` as a Web redirect URI (Step 4b). Use **Sign in as a different user** (`prompt=select_account`) to switch accounts. |
 | `/auth/me` role is always `pulse-viewer` | `groups` claim missing or group IDs wrong. Re-check Step 5 and the three `*_GROUP_ID` values. |
 | `AADSTS700016` app not found | Wrong `ENTRA_CLIENT_ID` or signed into the wrong tenant. |
 | `AADSTS7000215` invalid client secret | You copied the Secret **ID** instead of the **Value**, or it expired. Make a new secret. |

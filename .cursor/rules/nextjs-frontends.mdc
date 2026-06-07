@@ -19,6 +19,8 @@ Both talk to NestJS API at `API_URL` (default `http://localhost:4000`). Run on h
 
 Frontends do **not** run their own OIDC. To log in, redirect the user to the API: `GET {API_URL}/auth/login`. The API runs the MSAL flow (callback `http://localhost:4000/auth/callback`) and returns an app session JWT. Store it and send as `Authorization: Bearer` on API calls. No NextAuth, no MSAL in the frontend.
 
+Auth gate screens (`AuthScreen`) must always offer **Sign out** (`GET /auth/logout` — federated Entra logout) and **Sign in as a different user** (`/auth/login?prompt=select_account`) whenever a token exists. Clearing `localStorage` alone is not enough — Microsoft SSO keeps the browser session.
+
 ## Board UI requirements
 
 - Entra SSO login gate
@@ -33,11 +35,11 @@ Frontends do **not** run their own OIDC. To log in, redirect the user to the API
 - Live activity feed via SSE (no polling)
 - Health leaderboard: tasks sorted by `health_score` ASC
 - Momentum meter: rolling average mood over last 24h
-- AI panel: streaming RAG responses from `POST /api/intel/query`
+- AI panel: persistent per-user chat (`intel_chat_turns`) — `GET /intel/chat` hydrates on load, `POST /intel/query` streams RAG answers and saves turns, prior turns included in LLM context; `DELETE /intel/chat` clears history; scrollable chat UI with source citations; input clears after send
 
 ## Conventions
 
-- App Router, TypeScript strict, Tailwind CSS
+- App Router, TypeScript strict, **Tailwind CSS v4** (`@import "tailwindcss"`, `@theme` in `globals.css`, `@tailwindcss/postcss`)
 - `'use client'` only when hooks or browser APIs required
 - API calls server-side where possible; SSE client-side in Intel feed
 - Import shared types from `@pulse/shared-types`

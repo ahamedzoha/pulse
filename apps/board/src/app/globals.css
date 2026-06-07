@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-pulse-bg: #060a10;
+  --color-pulse-surface: #0c121c;
+  --color-pulse-panel: #121a28;
+  --color-pulse-elevated: #1a2436;
+  --color-pulse-border: rgb(255 255 255 / 0.08);
+  --color-pulse-accent: #3b82f6;
+  --color-pulse-accent-dim: #2563eb;
+  --color-pulse-glow: #60a5fa;
+  --color-pulse-muted: #8b9cb3;
+  --color-pulse-cta: #f59e0b;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    @apply h-full;
+  }
+
+  body {
+    @apply h-full bg-pulse-bg font-sans text-slate-100 antialiased;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -30%, rgb(59 130 246 / 0.14), transparent),
+      radial-gradient(ellipse 50% 40% at 100% 0%, rgb(37 99 235 / 0.08), transparent),
+      radial-gradient(ellipse 40% 30% at 0% 100%, rgb(59 130 246 / 0.05), transparent);
+  }
+
+  ::selection {
+    background: rgb(59 130 246 / 0.35);
+    color: white;
+  }
+}
+
+@layer components {
+  .pulse-glass {
+    @apply rounded-2xl border border-white/8 bg-pulse-panel/90 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)] backdrop-blur-md;
+  }
+
+  .pulse-btn-primary {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-pulse-accent to-pulse-accent-dim px-4 py-2 text-sm font-medium text-white shadow-lg shadow-pulse-accent/20 transition-all duration-200 hover:shadow-pulse-accent/35 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .pulse-btn-secondary {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/4 px-4 py-2 text-sm text-slate-300 transition-colors duration-200 hover:border-white/20 hover:bg-white/8 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .pulse-btn-ghost {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs text-pulse-muted transition-colors duration-200 hover:bg-white/5 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent;
+  }
+
+  .pulse-input {
+    @apply w-full rounded-xl border border-white/10 bg-pulse-bg/80 px-3.5 py-2.5 text-sm text-white shadow-inner transition-colors duration-200 placeholder:text-slate-600 focus:border-pulse-accent/50 focus:outline-none focus:ring-2 focus:ring-pulse-accent/20;
+  }
+
+  .pulse-label {
+    @apply mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-pulse-muted;
+  }
+
+  .pulse-section {
+    @apply space-y-3 rounded-xl border border-white/6 bg-pulse-bg/50 p-4;
+  }
+
+  .pulse-fade-in {
+    animation: pulse-fade-in 0.35s ease-out both;
+  }
+
+  .pulse-modal-in {
+    animation: pulse-modal-in 0.25s ease-out both;
+  }
+}
+
+@keyframes pulse-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pulse-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.3);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgb(239 68 68 / 0.25);
+  }
+}
+
+.pulse-health-critical {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-fade-in,
+  .pulse-modal-in,
+  .pulse-health-critical {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

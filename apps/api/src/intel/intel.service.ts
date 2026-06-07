@@ -1,7 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  INTEL_CHAT_LLM_HISTORY_LIMIT,
+  MOOD_WEIGHTS,
+  type ActivityFeedItem,
+  type EventType,
+  type IntelChatSource,
+  type IntelChatTurn,
+  type Mood,
+  type TaskStatus,
+} from '@pulse/shared-types';
 import { env } from '../config/env';
 import { DatabaseService } from '../database/database.service';
 import { DashScopeService } from '../llm/dashscope.service';
+
+export interface LeaderboardEntry {
+  id: string;
+  title: string;
+  status: string;
+  healthScore: number;
+  assigneeName: string | null;
+  lastActivityAt: string;
+}
+
+export interface MomentumSnapshot {
+  /** Weighted mood average over the last 24h (1–4 scale). */
+  average: number;
+  /** Same value scaled to 0–100 for the meter UI. */
+  percentage: number;
+  eventCount: number;
+}
 
 export interface SourceChunk {
   taskId: string;
@@ -27,6 +54,175 @@ export class IntelService {
     private readonly db: DatabaseService,
     private readonly dashscope: DashScopeService,
   ) {}
+
+  /** Recent activity for Intel feed hydration (newest first). */
+  async recentFeed(limit = 50): Promise<ActivityFeedItem[]> {
+    const { rows } = await this.db.query<{
+      id: string;
+      task_id: string;
+      actor_id: string;
+      event_type: EventType;
+      old_value: string | null;
+      new_value: string | null;
+      comment_text: string | null;
+      mood: Mood;
+      occurred_at: Date;
+      task_title: string;
+      task_status: TaskStatus;
+      actor_name: string;
+    }>(
+      `SELECT te.id, te.task_id, te.actor_id, te.event_type,
+              te.old_value, te.new_value, te.comment_text, te.mood, te.occurred_at,
+              t.title AS task_title, t.status AS task_status,
+              u.display_name AS actor_name
+         FROM task_events te
+         JOIN tasks t ON t.id = te.task_id
+         JOIN users u ON u.id = te.actor_id
+        ORDER BY te.occurred_at DESC
+        LIMIT $1`,
+      [limit],
+    );
+
+    return rows.map((r) => ({
+      id: r.id,
+      taskId: r.task_id,
+      actorId: r.actor_id,
+      eventType: r.event_type,
+      oldValue: r.old_value ?? undefined,
+      newValue: r.new_value ?? undefined,
+      commentText: r.comment_text ?? undefined,
+      mood: r.mood,
+      occurredAt: r.occurred_at.toISOString(),
+      taskTitle: r.task_title,
+      taskStatus: r.task_status,
+      actorName: r.actor_name,
+    }));
+  }
+
+  /** Tasks sorted by health_score ASC (lowest / most at-risk first). */
+  async leaderboard(limit = 20): Promise<LeaderboardEntry[]> {
+    const { rows } = await this.db.query<{
+      id: string;
+      title: string;
+      status: string;
+      health_score: number;
+      assignee_name: string | null;
+      last_activity_at: Date;
+    }>(
+      `SELECT t.id, t.title, t.status, t.health_score, t.last_activity_at,
+              u.display_name AS assignee_name
+         FROM tasks t
+         LEFT JOIN users u ON u.id = t.assignee_id
+        ORDER BY t.health_score ASC, t.last_activity_at ASC
+        LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      healthScore: r.health_score,
+      assigneeName: r.assignee_name,
+      lastActivityAt: r.last_activity_at.toISOString(),
+    }));
+  }
+
+  /** Rolling 24h average of MOOD_WEIGHTS across task_events. */
+  async momentum(): Promise<MomentumSnapshot> {
+    const { rows } = await this.db.query<{ mood: Mood }>(
+      `SELECT mood FROM task_events
+        WHERE occurred_at >= now() - interval '24 hours'`,
+    );
+    if (!rows.length) {
+      return { average: 2, percentage: 50, eventCount: 0 };
+    }
+    const sum = rows.reduce((acc, r) => acc + MOOD_WEIGHTS[r.mood], 0);
+    const average = sum / rows.length;
+    const max = Math.max(...Object.values(MOOD_WEIGHTS));
+    return {
+      average: Math.round(average * 100) / 100,
+      percentage: Math.round((average / max) * 100),
+      eventCount: rows.length,
+    };
+  }
+
+  /** Load persisted chat turns for the Intel UI (oldest first). */
+  async listChatTurns(userId: string, limit = 100): Promise<IntelChatTurn[]> {
+    const { rows } = await this.db.query<{
+      id: string;
+      question: string;
+      answer: string | null;
+      sources: IntelChatSource[];
+      error: string | null;
+      created_at: Date;
+    }>(
+      `SELECT id, question, answer, sources, error, created_at
+         FROM intel_chat_turns
+        WHERE user_id = $1
+        ORDER BY created_at ASC
+        LIMIT $2`,
+      [userId, limit],
+    );
+
+    return rows.map((r) => ({
+      id: r.id,
+      question: r.question,
+      answer: r.answer ?? '',
+      sources: Array.isArray(r.sources) ? r.sources : [],
+      error: r.error ?? undefined,
+      createdAt: r.created_at.toISOString(),
+    }));
+  }
+
+  /** Prior completed turns for LLM multi-turn context (excludes current question). */
+  async chatHistoryForLlm(
+    userId: string,
+    limit = INTEL_CHAT_LLM_HISTORY_LIMIT,
+  ): Promise<Array<{ question: string; answer: string }>> {
+    const { rows } = await this.db.query<{ question: string; answer: string }>(
+      `SELECT question, answer
+         FROM intel_chat_turns
+        WHERE user_id = $1
+          AND error IS NULL
+          AND answer IS NOT NULL
+          AND btrim(answer) <> ''
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [userId, limit],
+    );
+    return rows.reverse();
+  }
+
+  async createChatTurn(userId: string, question: string): Promise<string> {
+    const { rows } = await this.db.query<{ id: string }>(
+      `INSERT INTO intel_chat_turns (user_id, question)
+       VALUES ($1, $2)
+       RETURNING id`,
+      [userId, question],
+    );
+    return rows[0].id;
+  }
+
+  async finalizeChatTurn(
+    turnId: string,
+    userId: string,
+    answer: string,
+    sources: SourceChunk[],
+    error?: string,
+  ): Promise<void> {
+    await this.db.query(
+      `UPDATE intel_chat_turns
+          SET answer = $3, sources = $4::jsonb, error = $5
+        WHERE id = $1 AND user_id = $2`,
+      [turnId, userId, answer, JSON.stringify(sources), error ?? null],
+    );
+  }
+
+  async clearChat(userId: string): Promise<void> {
+    await this.db.query(`DELETE FROM intel_chat_turns WHERE user_id = $1`, [
+      userId,
+    ]);
+  }
 
   /** Embed the question and pgvector cosine-search the top matching events. */
   async search(
@@ -60,10 +256,11 @@ export class IntelService {
     };
   }
 
-  /** Stream a grounded answer from Qwen using the retrieved context. */
+  /** Stream a grounded answer from Qwen using RAG context + prior chat turns. */
   async *streamAnswer(
     question: string,
     sources: SourceChunk[],
+    history: Array<{ question: string; answer: string }>,
   ): AsyncGenerator<string> {
     const context = sources.length
       ? sources
@@ -71,22 +268,35 @@ export class IntelService {
           .join('\n')
       : '(no relevant activity found)';
 
+    type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
+    const messages: Msg[] = [
+      {
+        role: 'system',
+        content:
+          'You are Pulse Intel, an assistant that answers questions about a team task ' +
+          'board. Use the retrieved activity context for factual answers about tasks and ' +
+          'events. Use prior conversation turns for follow-up questions and continuity. ' +
+          "If the context doesn't contain the answer, say you don't have enough information. " +
+          'Be concise.',
+      },
+    ];
+
+    for (const turn of history) {
+      messages.push({ role: 'user', content: turn.question });
+      messages.push({ role: 'assistant', content: turn.answer });
+    }
+
+    messages.push({
+      role: 'user',
+      content:
+        `Retrieved activity context for this question:\n${context}\n\n` +
+        `Question: ${question}`,
+    });
+
     const stream = await this.dashscope.raw.chat.completions.create({
       model: env.dashscope.llmModel,
       stream: true,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are Pulse Intel, an assistant that answers questions about a team task ' +
-            'board using the provided activity context. Use ONLY the context below. If it ' +
-            "doesn't contain the answer, say you don't have enough information. Be concise.",
-        },
-        {
-          role: 'user',
-          content: `Context:\n${context}\n\nQuestion: ${question}`,
-        },
-      ],
+      messages,
     });
 
     for await (const chunk of stream) {

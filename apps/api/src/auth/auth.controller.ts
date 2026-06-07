@@ -30,10 +30,15 @@ export class AuthController {
     private readonly users: UsersService,
   ) {}
 
-  /** Step 1 — redirect the browser to Entra. `?app=board|intel` sets the post-login target. */
+  /**
+   * Step 1 — redirect the browser to Entra.
+   * `?app=board|intel` sets the post-login target.
+   * `?prompt=select_account` forces the account picker (switch users).
+   */
   @Get('login')
   async login(
     @Query('app') app: string | undefined,
+    @Query('prompt') prompt: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const target: AppTarget = app === 'intel' ? 'intel' : 'board';
@@ -41,8 +46,30 @@ export class AuthController {
     this.pruneStates();
     this.pendingStates.set(state, { app: target, ts: Date.now() });
 
-    const url = await this.auth.buildLoginUrl(state);
+    const oidcPrompt =
+      prompt === 'select_account' || prompt === 'login' ? prompt : undefined;
+    const url = await this.auth.buildLoginUrl(state, oidcPrompt);
     res.redirect(url);
+  }
+
+  /** Federated sign-out — ends the Entra browser SSO session. */
+  @Get('logout')
+  logout(
+    @Query('app') app: string | undefined,
+    @Res() res: Response,
+  ): void {
+    const target: AppTarget = app === 'intel' ? 'intel' : 'board';
+    res.redirect(this.auth.buildLogoutUrl(target));
+  }
+
+  /** Entra post-logout landing — bounce to the frontend unsigned gate. */
+  @Get('logged-out')
+  loggedOut(
+    @Query('app') app: string | undefined,
+    @Res() res: Response,
+  ): void {
+    const target: AppTarget = app === 'intel' ? 'intel' : 'board';
+    res.redirect(env.frontends[target]);
   }
 
   /** Step 2 — Entra redirects here with the auth code. Exchange, issue JWT, bounce to frontend. */

@@ -4,7 +4,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { MsalService } from './msal.service';
+import { MsalService, type OidcPrompt } from './msal.service';
+import { env } from '../config/env';
 import { UsersService, UserRow } from '../users/users.service';
 import { groupsToRole } from './role-mapping';
 import type { EntraClaims, SessionJwtPayload } from './auth.types';
@@ -19,8 +20,15 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  buildLoginUrl(state: string): Promise<string> {
-    return this.msal.getAuthCodeUrl(state);
+  buildLoginUrl(state: string, prompt?: OidcPrompt): Promise<string> {
+    return this.msal.getAuthCodeUrl(state, prompt);
+  }
+
+  /** Federated sign-out — clears the Entra browser session, then returns to the app. */
+  buildLogoutUrl(app: 'board' | 'intel'): string {
+    const postLogout = `${env.apiUrl}/auth/logged-out?app=${app}`;
+    const base = `https://login.microsoftonline.com/${env.entra.tenantId}/oauth2/v2.0/logout`;
+    return `${base}?post_logout_redirect_uri=${encodeURIComponent(postLogout)}`;
   }
 
   /** Exchange the auth code, upsert the user, and return a signed session JWT. */

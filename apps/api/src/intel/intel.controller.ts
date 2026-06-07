@@ -1,14 +1,19 @@
 import {
   Body,
   Controller,
+  Delete,
+  Get,
   MessageEvent,
   Post,
+  Query,
   Res,
   Sse,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { map, type Observable } from 'rxjs';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthUser } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RealtimeService } from '../realtime/realtime.service';
 import { IntelService } from './intel.service';
@@ -21,6 +26,29 @@ export class IntelController {
     private readonly intel: IntelService,
   ) {}
 
+  /** Recent feed items for page load (SSE only streams events after connect). */
+  @Get('feed/recent')
+  @UseGuards(JwtAuthGuard)
+  recentFeed(@Query('limit') limit?: string) {
+    const n = limit ? Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100) : 50;
+    return this.intel.recentFeed(n);
+  }
+
+  /** Persisted Intel AI chat history for the signed-in user. */
+  @Get('chat')
+  @UseGuards(JwtAuthGuard)
+  chatHistory(@CurrentUser() user: AuthUser) {
+    return this.intel.listChatTurns(user.userId);
+  }
+
+  /** Delete all chat turns for the signed-in user. */
+  @Delete('chat')
+  @UseGuards(JwtAuthGuard)
+  async clearChat(@CurrentUser() user: AuthUser) {
+    await this.intel.clearChat(user.userId);
+    return { ok: true };
+  }
+
   /**
    * Live activity feed. Native EventSource can't send Authorization headers,
    * so this stream is unauthenticated for the POC (data is non-sensitive
@@ -31,38 +59,81 @@ export class IntelController {
     return this.realtime.stream$.pipe(map((item) => ({ data: item })));
   }
 
+  /** Health leaderboard — lowest scores first. All authenticated roles. */
+  @Get('leaderboard')
+  @UseGuards(JwtAuthGuard)
+  leaderboard() {
+    return this.intel.leaderboard();
+  }
+
+  /** Team momentum meter — 24h rolling mood average. All authenticated roles. */
+  @Get('momentum')
+  @UseGuards(JwtAuthGuard)
+  momentum() {
+    return this.intel.momentum();
+  }
+
   /**
-   * RAG Q&A. Embeds the question → pgvector top-K → streams a grounded Qwen
-   * answer as SSE-formatted chunks over POST (consume via fetch + ReadableStream).
-   * Available to any authenticated user (viewers included).
+   * RAG Q&A with multi-turn context. Embeds the question → pgvector top-K →
+   * streams a grounded Qwen answer. Persists each turn per user; prior turns
+   * are included in the LLM messages array.
    */
   @Post('query')
   @UseGuards(JwtAuthGuard)
-  async query(@Body() dto: QueryDto, @Res() res: Response): Promise<void> {
+  async query(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: QueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
     const send = (data: unknown) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
+    const turnId = await this.intel.createChatTurn(user.userId, dto.question);
+    send({ type: 'turn', id: turnId });
+
+    let answer = '';
+    let sources: Awaited<ReturnType<IntelService['search']>>['sources'] = [];
+
     try {
-      const { embedded, sources } = await this.intel.search(dto.question);
-      if (!embedded) {
-        send({ type: 'error', message: 'Embeddings unavailable (no DashScope key)' });
+      const history = await this.intel.chatHistoryForLlm(user.userId);
+      const searchResult = await this.intel.search(dto.question);
+      if (!searchResult.embedded) {
+        const message = 'Embeddings unavailable (no DashScope key)';
+        await this.intel.finalizeChatTurn(turnId, user.userId, '', [], message);
+        send({ type: 'error', message });
+        send({ type: 'done', turnId });
         res.end();
         return;
       }
 
+      sources = searchResult.sources;
       send({ type: 'sources', sources });
-      for await (const token of this.intel.streamAnswer(dto.question, sources)) {
+
+      for await (const token of this.intel.streamAnswer(
+        dto.question,
+        sources,
+        history,
+      )) {
+        answer += token;
         send({ type: 'token', value: token });
       }
-      send({ type: 'done' });
+
+      await this.intel.finalizeChatTurn(turnId, user.userId, answer, sources);
+      send({ type: 'done', turnId });
     } catch (err) {
-      send({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Query failed',
-      });
+      const message = err instanceof Error ? err.message : 'Query failed';
+      await this.intel.finalizeChatTurn(
+        turnId,
+        user.userId,
+        answer,
+        sources,
+        message,
+      );
+      send({ type: 'error', message });
+      send({ type: 'done', turnId });
     } finally {
       res.end();
     }

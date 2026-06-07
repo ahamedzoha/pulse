@@ -31,6 +31,7 @@ function optional(name: string, fallback: string): string {
 
 export const env = {
   apiPort: Number(optional('API_PORT', '4000')),
+  apiUrl: optional('API_URL', 'http://localhost:4000'),
 
   databaseUrl: required('DATABASE_URL'),
   redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),

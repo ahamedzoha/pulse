@@ -4,7 +4,8 @@ import type { ActivityFeedItem } from '@pulse/shared-types';
 
 /**
  * In-process bridge between the realtime worker (producer) and the Intel SSE
- * stream (consumer). POC scope — no persistence or replay.
+ * stream (consumer). SSE only pushes new events; GET /intel/feed/recent
+ * hydrates history from task_events on page load.
  */
 @Injectable()
 export class RealtimeService {

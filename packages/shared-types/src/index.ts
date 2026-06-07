@@ -65,6 +65,28 @@ export const QUEUES = {
   TASK_EVENTS: 'task-events',
 } as const;
 
+/** RAG source citation stored on an Intel chat turn */
+export interface IntelChatSource {
+  taskId: string;
+  title: string;
+  status: string;
+  contentText: string;
+  score: number;
+}
+
+/** Persisted Intel AI Q&A turn (per user) */
+export interface IntelChatTurn {
+  id: string;
+  question: string;
+  answer: string;
+  sources: IntelChatSource[];
+  error?: string;
+  createdAt: string;
+}
+
+/** Max prior turns sent to the LLM as conversation context */
+export const INTEL_CHAT_LLM_HISTORY_LIMIT = 20;
+
 // Worker pattern: TaskEvent payload is minimal. Workers JOIN tasks + users
 // tables to enrich context (title, status, actor name) when building embeddings
 // or computing health scores. Queue stays lean; workers read current state.

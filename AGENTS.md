@@ -27,7 +27,7 @@ This file is the **on-ramp** for AI agents working in this repo. **Authoritative
 | Layer | Technology |
 |-------|------------|
 | Auth | Microsoft Entra ID (Free tier OK) via MSAL Node OIDC in NestJS; app session JWT (passport-jwt); `groups` → RBAC |
-| Frontends | Next.js App Router, TypeScript, Tailwind CSS |
+| Frontends | Next.js 16 App Router, TypeScript, Tailwind CSS v4 (`@theme` in CSS) |
 | API | NestJS, TypeScript strict |
 | Database | PostgreSQL 16 + pgvector (same instance) |
 | Queue | BullMQ + Redis |
@@ -64,7 +64,7 @@ pulse/
 5. Workers — `embed-worker`, `health-worker` (cron 15 min), `realtime-worker` (SSE)
 6. RAG — `POST /api/intel/query` (embed → pgvector → Qwen stream)
 7. Board UI — Kanban, health badges, mood picker
-8. Intel UI — SSE feed, leaderboard, momentum meter, AI panel
+8. Intel UI — SSE feed, leaderboard, momentum meter, AI chat panel (scrollable session history)
 
 ## Key domain rules
 
@@ -111,6 +111,13 @@ Simple EventEmitter pattern in `realtime-worker`. Intel endpoint: `GET /api/inte
 ### RAG flow
 
 Question → DashScope `text-embedding-v3` → pgvector cosine search (top 10) → Qwen prompt with context → stream response.
+
+### Intel AI panel (chat UX)
+
+- **DB-backed per user** (`intel_chat_turns`): `GET /intel/chat` on load, `DELETE /intel/chat` to clear
+- Each query persists a turn; prior turns (up to `INTEL_CHAT_LLM_HISTORY_LIMIT`) are sent to Qwen as multi-turn context alongside RAG retrieval for the new question
+- Chat-style scrollable UI; input clears on send; quick-prompt chips do not leave text in the textarea
+- Feed hydration: `GET /intel/feed/recent` loads activity on load; SSE streams only new events after connect
 
 ### DashScope client
 

@@ -60,7 +60,7 @@ The second app watches all activity, embeds events into pgvector, and uses an LL
 | App | Path | Port | Users | Description |
 |-----|------|------|-------|-------------|
 | **Pulse Board** | `apps/board` | 3000 | admin, member | Kanban board — create tasks, move statuses, comment with mood tags |
-| **Pulse Intel** | `apps/intel` | 3001 | admin, member, viewer | Live feed, health leaderboard, momentum meter, RAG Q&A |
+| **Pulse Intel** | `apps/intel` | 3001 | admin, member, viewer | Live feed, health leaderboard, momentum meter, RAG chat |
 | **API** | `apps/api` | 4000 | — | Shared NestJS backend |
 
 Entra app registration (single app, validated in NestJS):
@@ -125,7 +125,7 @@ flowchart TB
 | Layer | Technology | Notes |
 |-------|------------|-------|
 | Auth / SSO | Microsoft Entra ID | Free tier is sufficient; MSAL Node OIDC + passport-jwt session in NestJS |
-| Frontends | Next.js (App Router) | TypeScript, Tailwind CSS |
+| Frontends | Next.js 16 (App Router, Turbopack) | TypeScript, Tailwind CSS v4 |
 | Backend | NestJS | TypeScript strict, modular |
 | Database | PostgreSQL 16 | `pgvector/pgvector:pg16` image |
 | Vector store | pgvector | 1536-dim embeddings, HNSW index |
@@ -196,6 +196,17 @@ User action (Board)
 ```
 
 Health formula: `100 - (hours_since_last_activity × decay_rate)`, floored at 0.
+
+### Intel AI panel (chat)
+
+- **Persistent per-user chat** in `intel_chat_turns` — survives refresh; `GET /intel/chat` hydrates UI
+- Each `POST /intel/query` saves a turn and sends the last 20 completed turns to Qwen as conversation context (plus fresh pgvector RAG context for the new question)
+- Scrollable chat UI — user bubbles + streamed assistant replies with per-turn source citations
+- Suggestion chips on empty state; input **clears after send**
+- **Clear chat** → `DELETE /intel/chat` wipes the user's thread
+- Recent activity feed hydrates via `GET /intel/feed/recent`; SSE adds live events after connect
+
+**Existing DBs:** run `infra/postgres/migrations/001_intel_chat_turns.sql` if the table is missing.
 
 ### RAG flow
 
@@ -322,8 +333,8 @@ Use the **international** endpoint (`dashscope-intl.aliyuncs.com`), not the Chin
 | 4 | Task CRUD + event emission + BullMQ enqueue | Done |
 | 5 | BullMQ workers (embed, health cron, realtime/SSE) | Done |
 | 6 | RAG query endpoint (`POST /intel/query`, streaming) — see [`docs/dashscope-setup.md`](docs/dashscope-setup.md) | Done |
-| 7 | Board UI (Kanban, health badges, mood picker) | Pending |
-| 8 | Intel UI (SSE feed, leaderboard, momentum, AI panel) | Pending |
+| 7 | Board UI (Kanban, health badges, mood picker) | Done |
+| 8 | Intel UI (SSE feed, leaderboard, momentum, AI panel) | Done |
 
 ---
 
