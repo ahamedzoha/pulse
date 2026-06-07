@@ -50,7 +50,7 @@ export function Header({ user }: Props) {
             Pulse Intel
           </h1>
           <p className="text-[10px] text-pulse-muted sm:text-xs">
-            Live feed · leaderboard · momentum · AI
+            AI intelligence · live ops · health signals
           </p>
         </div>
       </div>

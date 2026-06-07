@@ -77,6 +77,15 @@
   .pulse-answer-quote {
     @apply relative my-1 rounded-r-xl border-l-2 border-pulse-accent/55 bg-gradient-to-r from-pulse-accent/10 via-pulse-accent/5 to-transparent py-2.5 pl-4 pr-3 text-sm leading-relaxed text-slate-300;
   }
+
+  .pulse-intel-hero {
+    @apply relative overflow-hidden ring-1 ring-pulse-accent/30 shadow-[0_0_56px_-16px_rgba(139,92,246,0.45)];
+  }
+
+  .pulse-intel-hero::before {
+    content: '';
+    @apply pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-pulse-accent/10 via-transparent to-sky-500/6;
+  }
 }
 
 @keyframes pulse-fade-in {

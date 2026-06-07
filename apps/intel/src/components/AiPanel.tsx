@@ -364,12 +364,11 @@ export function AiPanel() {
   };
 
   return (
-    <section className="pulse-glass flex h-full min-h-0 flex-col overflow-hidden transition-shadow duration-300 hover:shadow-[0_12px_40px_-10px_rgba(139,92,246,0.15)]">
-      <header className="relative shrink-0 border-b border-white/6 px-5 py-4">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-pulse-accent/10 via-transparent to-transparent" />
+    <section className="pulse-glass pulse-intel-hero flex h-full min-h-0 flex-col overflow-hidden transition-shadow duration-300 hover:shadow-[0_16px_48px_-12px_rgba(139,92,246,0.35)]">
+      <header className="relative z-10 shrink-0 border-b border-white/8 px-5 py-4 sm:px-6 sm:py-5">
         <div className="relative flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pulse-accent to-violet-600 shadow-lg shadow-pulse-accent/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-pulse-accent to-violet-600 shadow-lg shadow-pulse-accent/30 sm:h-11 sm:w-11">
               <svg
                 className="h-4 w-4 text-white"
                 fill="none"
@@ -386,11 +385,11 @@ export function AiPanel() {
               </svg>
             </div>
             <div>
-              <h2 className="text-sm font-semibold tracking-tight text-white">
+              <h2 className="text-base font-semibold tracking-tight text-white sm:text-lg">
                 Pulse Intel AI
               </h2>
-              <p className="text-[11px] text-pulse-muted">
-                RAG over team activity · pgvector + Qwen
+              <p className="text-[11px] text-pulse-muted sm:text-xs">
+                Ask anything — RAG over live team activity
               </p>
             </div>
           </div>
@@ -407,24 +406,27 @@ export function AiPanel() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5"
           aria-label="Chat history"
         >
           {loadingHistory && (
-            <div className="flex h-full min-h-[180px] items-center justify-center">
+            <div className="flex h-full min-h-[200px] items-center justify-center">
               <Spinner label="Loading chat history…" size="sm" />
             </div>
           )}
 
           {!loadingHistory && turns.length === 0 && !busy && (
-            <div className="flex h-full min-h-[180px] flex-col justify-center">
-              <p className="mb-4 text-center text-sm text-pulse-muted">
-                Ask anything about tasks, blockers, or team momentum.
+            <div className="flex h-full min-h-[220px] flex-col justify-center py-4">
+              <p className="mb-1 text-center text-base font-medium text-slate-200">
+                Intelligence layer
               </p>
-              <div className="flex flex-wrap justify-center gap-2">
+              <p className="mb-6 text-center text-sm text-pulse-muted">
+                Synthesizes tasks, blockers, and team signals from pgvector + Qwen.
+              </p>
+              <div className="mx-auto flex max-w-2xl flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}

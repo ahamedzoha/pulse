@@ -2,18 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { fetchMomentum, type MomentumSnapshot } from '@/lib/api';
-import { Panel } from './Panel';
 
-function MomentumIcon() {
-  return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-pulse-accent/30 to-sky-500/20 ring-1 ring-white/10">
-      <svg className="h-4 w-4 text-pulse-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-      </svg>
-    </div>
-  );
+function moodLabel(pct: number) {
+  if (pct >= 75) return 'High energy';
+  if (pct >= 50) return 'Steady';
+  if (pct >= 25) return 'Low';
+  return 'Dragging';
 }
 
+/** Compact horizontal metrics ribbon — no wasted vertical space. */
 export function MomentumMeter() {
   const [snap, setSnap] = useState<MomentumSnapshot | null>(null);
 
@@ -26,48 +23,87 @@ export function MomentumMeter() {
   }, []);
 
   const pct = snap?.percentage ?? 50;
-  const label =
-    pct >= 75 ? 'High energy' : pct >= 50 ? 'Steady' : pct >= 25 ? 'Low' : 'Dragging';
+  const label = moodLabel(pct);
 
   return (
-    <Panel
-      title="Team momentum"
-      subtitle="24h mood rolling average"
-      icon={<MomentumIcon />}
+    <section
+      className="pulse-glass flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:gap-x-6 sm:px-5"
+      aria-label="Team momentum"
     >
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-2">
-        <div className="relative mb-2 h-24 w-24 sm:h-28 sm:w-28">
+      <div className="flex items-center gap-3">
+        <div className="relative h-11 w-11 shrink-0 sm:h-12 sm:w-12">
           <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90" aria-hidden>
-            <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgb(255 255 255 / 0.06)" strokeWidth="3" />
             <circle
               cx="18"
               cy="18"
               r="15.9"
               fill="none"
-              stroke="url(#momentum-grad)"
+              stroke="rgb(255 255 255 / 0.06)"
+              strokeWidth="3"
+            />
+            <circle
+              cx="18"
+              cy="18"
+              r="15.9"
+              fill="none"
+              stroke="url(#momentum-ribbon-grad)"
               strokeWidth="3"
               strokeDasharray={`${pct} ${100 - pct}`}
               strokeLinecap="round"
               className="transition-all duration-500 ease-out"
             />
             <defs>
-              <linearGradient id="momentum-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <linearGradient id="momentum-ribbon-grad" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#8b5cf6" />
                 <stop offset="100%" stopColor="#38bdf8" />
               </linearGradient>
             </defs>
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold tabular-nums text-white">{pct}%</span>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-[11px] font-bold tabular-nums text-white sm:text-xs">
+              {pct}%
+            </span>
           </div>
         </div>
-        <p className="text-sm font-medium text-slate-200">{label}</p>
-        {snap && (
-          <p className="mt-1.5 text-center text-[10px] text-pulse-muted">
-            avg {snap.average.toFixed(2)} / 4 · {snap.eventCount} events (24h)
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-pulse-muted">
+            Team momentum
           </p>
-        )}
+          <p className="text-sm font-semibold text-white sm:text-base">{label}</p>
+        </div>
       </div>
-    </Panel>
+
+      <div className="min-w-[140px] flex-1 basis-[180px]">
+        <div className="mb-1 flex items-center justify-between text-[10px] text-pulse-muted">
+          <span>24h mood rolling avg</span>
+          <span className="tabular-nums text-slate-400">{pct}%</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/5 sm:h-2">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-pulse-accent to-sky-400 transition-all duration-500 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {snap && (
+        <div className="flex shrink-0 items-center gap-4 border-l border-white/8 pl-4 sm:gap-6 sm:pl-6">
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-pulse-muted">Mood avg</p>
+            <p className="text-sm font-semibold tabular-nums text-slate-200">
+              {snap.average.toFixed(2)}
+              <span className="text-pulse-muted"> / 4</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-pulse-muted">Events</p>
+            <p className="text-sm font-semibold tabular-nums text-slate-200">
+              {snap.eventCount}
+              <span className="text-pulse-muted"> / 24h</span>
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

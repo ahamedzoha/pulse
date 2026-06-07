@@ -75,18 +75,29 @@ export default function IntelPage() {
     <TaskDetailProvider>
       <div className="flex h-dvh flex-col overflow-hidden">
         <Header user={user} />
-        <main className="min-h-0 flex-1 overflow-y-auto p-3 lg:grid lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-4 lg:overflow-hidden lg:p-4">
-          <div className="mb-3 min-h-[220px] lg:col-span-4 lg:mb-0 lg:h-full lg:min-h-0">
-            <MomentumMeter />
-          </div>
-          <div className="mb-3 min-h-[280px] lg:col-span-8 lg:mb-0 lg:h-full lg:min-h-0">
-            <Leaderboard />
-          </div>
-          <div className="mb-3 min-h-[320px] lg:col-span-5 lg:mb-0 lg:h-full lg:min-h-0">
-            <ActivityFeed />
-          </div>
-          <div className="min-h-[380px] lg:col-span-7 lg:h-full lg:min-h-0">
-            <AiPanel />
+        {/*
+          Command-center layout (lg+):
+          · Top: compact momentum ribbon
+          · Left rail (5/12): leaderboard + live feed
+          · Right hero (7/12): AI panel — primary surface
+          Mobile: AI first, then insights stack
+        */}
+        <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 lg:gap-4 lg:overflow-hidden lg:p-4">
+          <MomentumMeter />
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
+            <div className="order-1 flex min-h-[min(52vh,520px)] flex-col lg:order-2 lg:col-span-7 lg:min-h-0">
+              <AiPanel />
+            </div>
+
+            <div className="order-2 grid min-h-0 grid-rows-2 gap-3 max-lg:min-h-[480px] lg:order-1 lg:col-span-5">
+              <div className="min-h-0">
+                <Leaderboard />
+              </div>
+              <div className="min-h-0">
+                <ActivityFeed />
+              </div>
+            </div>
           </div>
         </main>
       </div>
