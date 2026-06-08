@@ -234,11 +234,17 @@ Chip copy lives in `apps/intel/src/components/AiPanel.tsx` (`SUGGESTIONS`). The 
 User question (Intel AI panel)
   → POST /intel/query
     → Load prior chat turns from DB (multi-turn context)
+    → Load live health snapshot (top 15 tasks, lowest health first — same as leaderboard)
     → Embed question (text-embedding-v4)
     → pgvector similarity search (top 10, cosine)
-    → Prompt Qwen with system + history + RAG context + question
+    → Join tasks.health_score into each source; prefix content with health + status
+    → Prompt Qwen with system + history + health snapshot + enriched events + question
     → Stream response to UI; persist turn in intel_chat_turns
 ```
+
+**Health + narrative:** Risk and bottleneck questions use the **live health snapshot** (decay scores from `tasks`). “Why” and blocker detail come from **retrieved activity events** (comments, moods, status changes). Source cards in the UI show both the semantic match % and current health score.
+
+**Answer formatting:** The system prompt (`apps/api/src/intel/prompts.ts`) enforces `-` bullets and `> Why:` blockquotes — no numbered lists. The Intel UI (`format-answer.tsx`) parses that markdown into task cards with health/status chips; it also tolerates legacy `1.` / `→` output by merging split lists.
 
 ---
 
@@ -429,6 +435,14 @@ Expect a spread (e.g. 10–95), not all 100. After `seed:sync-health`, summary l
 | **Symptom** | AI panel error, empty sources, or generic “I don't have enough information” answers. |
 | **Cause** | Missing `DASHSCOPE_API_KEY`, wrong endpoint (China vs intl), workers not embedding events, or empty `event_embeddings`. |
 | **Fix** | 1. Set `DASHSCOPE_API_KEY` in `.env`; use intl base URL — see [`docs/dashscope-setup.md`](docs/dashscope-setup.md).<br>2. Restart API after env change.<br>3. Re-seed so workers populate embeddings: `pnpm seed:demo`.<br>4. Check vectors: `SELECT count(*) FROM event_embeddings WHERE embedding IS NOT NULL;` — expect > 0 after seed. |
+
+### AI says no tasks are “at critical risk” (but leaderboard shows red)
+
+| | |
+|---|---|
+| **Symptom** | Chip *“Which tasks are at critical risk?”* returns “no risk indicators” while the health leaderboard shows low scores. |
+| **Cause** | Older builds only passed event text to the LLM — `health_score` lived on `tasks` but not in RAG context. Fixed: every query now injects a live health snapshot + joins health into sources. |
+| **Fix** | 1. Restart API (`pnpm dev:api`) after pulling latest code.<br>2. Ask again (or clear chat) — answers should cite health scores and link to comment context.<br>3. Ensure `pnpm seed:sync-health` or `pnpm seed:demo` so scores are varied, not all 100. |
 
 Demo quick-prompt chips are grounded in `pnpm seed:demo` data — run seed before trying them (see [Intel AI quick prompts](#intel-ai-quick-prompts-demo)).
 

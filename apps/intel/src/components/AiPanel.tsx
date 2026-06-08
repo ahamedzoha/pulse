@@ -5,10 +5,16 @@ import type { IntelChatTurn } from '@pulse/shared-types';
 import {
   clearChatHistory,
   fetchChatHistory,
+  fetchLeaderboard,
   streamQuery,
   type RagSource,
 } from '@/lib/api';
-import { FormattedAnswer } from '@/lib/format-answer';
+import {
+  FormattedAnswer,
+  leaderboardToLinkable,
+  type LinkableTask,
+} from '@/lib/format-answer';
+import { healthChipClasses, healthColor } from '@/lib/health';
 import { Spinner } from './Spinner';
 import { useTaskDetail } from './TaskDetailContext';
 
@@ -61,6 +67,8 @@ function SourceCard({ source, index }: { source: RagSource; index: number }) {
   const { openTask } = useTaskDetail();
   const pct = Math.round(source.score * 100);
   const style = STATUS_STYLES[source.status] ?? STATUS_STYLES.todo;
+  const health =
+    source.healthScore != null ? healthColor(source.healthScore) : null;
 
   return (
     <li>
@@ -85,11 +93,20 @@ function SourceCard({ source, index }: { source: RagSource; index: number }) {
               {source.title}
             </span>
           </div>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ring-1 ring-inset ${style}`}
-          >
-            {statusLabel(source.status)}
-          </span>
+          <div className="flex shrink-0 items-center gap-1">
+            {health != null && source.healthScore != null && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1 ring-inset ${healthChipClasses[health]}`}
+              >
+                {source.healthScore}
+              </span>
+            )}
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ring-1 ring-inset ${style}`}
+            >
+              {statusLabel(source.status)}
+            </span>
+          </div>
         </div>
         <p className="line-clamp-2 text-[11px] leading-snug text-pulse-muted group-hover:text-slate-300">
           {source.contentText}
@@ -124,7 +141,13 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
-function AssistantBubble({ turn }: { turn: ChatTurn }) {
+function AssistantBubble({
+  turn,
+  linkTasks,
+}: {
+  turn: ChatTurn;
+  linkTasks: LinkableTask[];
+}) {
   const isStreaming = turn.status === 'streaming';
   const [sourcesOpen, setSourcesOpen] = useState(false);
 
@@ -152,7 +175,11 @@ function AssistantBubble({ turn }: { turn: ChatTurn }) {
         ) : (
           <>
             {turn.answer ? (
-              <FormattedAnswer text={turn.answer} sources={turn.sources} />
+              <FormattedAnswer
+                text={turn.answer}
+                sources={turn.sources}
+                linkTasks={linkTasks}
+              />
             ) : null}
             {turn.status === 'streaming' && turn.answer && (
               <span className="mt-1 inline-block h-4 w-0.5 animate-pulse bg-pulse-accent" />
@@ -212,6 +239,7 @@ function AssistantBubble({ turn }: { turn: ChatTurn }) {
 export function AiPanel() {
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [linkTasks, setLinkTasks] = useState<LinkableTask[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -251,6 +279,11 @@ export function AiPanel() {
         /* show empty state if history unavailable */
       })
       .finally(() => setLoadingHistory(false));
+    fetchLeaderboard()
+      .then((rows) => setLinkTasks(rows.map(leaderboardToLinkable)))
+      .catch(() => {
+        /* links fall back to RAG sources only */
+      });
   }, []);
 
   useEffect(() => {
@@ -450,7 +483,7 @@ export function AiPanel() {
                   className="space-y-3"
                 >
                   <UserBubble text={turn.question} />
-                  <AssistantBubble turn={turn} />
+                  <AssistantBubble turn={turn} linkTasks={linkTasks} />
                 </div>
               ))}
             </div>

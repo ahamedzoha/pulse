@@ -33,7 +33,7 @@ NestJS backend shared by Board and Intel frontends.
 | GET | `/intel/feed` | public (POC) | SSE live activity |
 | GET | `/intel/feed/recent` | JWT | Feed hydration |
 | GET/DELETE | `/intel/chat` | JWT | AI chat history |
-| POST | `/intel/query` | JWT | Streaming RAG + persist turn |
+| POST | `/intel/query` | JWT | Streaming RAG (health snapshot + enriched sources) + persist turn |
 | GET | `/intel/leaderboard`, `/intel/momentum` | JWT | Intel panels |
 
 ## Run

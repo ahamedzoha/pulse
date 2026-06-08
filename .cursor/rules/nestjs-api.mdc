@@ -110,7 +110,7 @@ No reconnect/persistence logic — POC scope.
 
 ## RAG endpoint
 
-`POST /intel/query`: load chat history → embed question → pgvector top-10 → Qwen stream with history + RAG context → persist `intel_chat_turns`.
+`POST /intel/query`: load chat history → live health snapshot (leaderboard top 15) → embed question → pgvector top-10 with `tasks.health_score` joined → enrich source text via `health-context.ts` → Qwen stream with history + health snapshot + events → persist `intel_chat_turns`.
 
 ## DashScope client
 

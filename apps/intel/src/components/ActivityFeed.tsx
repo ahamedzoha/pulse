@@ -4,7 +4,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fetchRecentFeed, type FeedItem } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { Panel } from './Panel';
+import { LiveActivityToastStack, type ActivityToast } from './LiveActivityToast';
 import { useTaskDetail } from './TaskDetailContext';
+
+const TOAST_TTL_MS = 5000;
+const MAX_TOASTS = 3;
 
 const eventLabels: Record<FeedItem['eventType'], string> = {
   created: 'created',
@@ -76,7 +80,25 @@ export function ActivityFeed() {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ActivityToast[]>([]);
   const seenRef = useRef(new Set<string>());
+  const toastTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const hydratedRef = useRef(false);
+
+  const dismissToast = (id: string) => {
+    const timer = toastTimersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const pushToast = (item: FeedItem) => {
+    setToasts((prev) => [{ id: item.id, item }, ...prev].slice(0, MAX_TOASTS));
+    const timer = setTimeout(() => dismissToast(item.id), TOAST_TTL_MS);
+    toastTimersRef.current.set(item.id, timer);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -91,7 +113,10 @@ export function ActivityFeed() {
         /* history optional — SSE still works */
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          hydratedRef.current = true;
+          setLoading(false);
+        }
       });
 
     const es = new EventSource(`${API_URL}/intel/feed`);
@@ -104,6 +129,7 @@ export function ActivityFeed() {
           seenRef.current.add(item.id);
           setFlashId(item.id);
           setTimeout(() => setFlashId(null), 1200);
+          if (hydratedRef.current) pushToast(item);
         }
         setItems((prev) => {
           if (prev.some((x) => x.id === item.id)) return prev;
@@ -117,6 +143,8 @@ export function ActivityFeed() {
     return () => {
       cancelled = true;
       es.close();
+      for (const timer of toastTimersRef.current.values()) clearTimeout(timer);
+      toastTimersRef.current.clear();
     };
   }, []);
 
@@ -125,6 +153,12 @@ export function ActivityFeed() {
     : 'No activity yet — create or update tasks on the Board.';
 
   return (
+    <>
+    <LiveActivityToastStack
+      toasts={toasts}
+      onDismiss={dismissToast}
+      onOpen={(taskId) => openTask(taskId)}
+    />
     <Panel
       title="Live activity"
       subtitle="Recent history + real-time events via SSE"
@@ -194,5 +228,6 @@ export function ActivityFeed() {
         )}
       </ul>
     </Panel>
+    </>
   );
 }

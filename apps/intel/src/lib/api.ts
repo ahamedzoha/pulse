@@ -33,6 +33,8 @@ export interface RagSource {
   taskId: string;
   title: string;
   status: string;
+  /** Live health at query time; absent on older persisted chat turns. */
+  healthScore?: number;
   contentText: string;
   score: number;
 }

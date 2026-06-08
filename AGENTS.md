@@ -110,7 +110,11 @@ Simple EventEmitter pattern in the task-events processor. Intel endpoint: `GET /
 
 ### RAG flow
 
-Question → DashScope `text-embedding-v4` → pgvector cosine search (top 10) → Qwen prompt with prior chat turns + RAG context → stream response; persist in `intel_chat_turns`.
+Question → live health snapshot (leaderboard top 15) + DashScope `text-embedding-v4` → pgvector cosine search (top 10) → enrich each source with `tasks.health_score` → Qwen prompt with prior chat turns + health snapshot + enriched events → stream response; persist in `intel_chat_turns`.
+
+Health bands in prompts: critical under 40, warning 40–70, healthy over 70 (see `HEALTH_THRESHOLDS`). Implementation: `apps/api/src/intel/health-context.ts`.
+
+LLM output format is constrained in `apps/api/src/intel/prompts.ts` (`-` bullets, `> Why:` lines). Rendered by `apps/intel/src/lib/format-answer.tsx`.
 
 ### Intel AI panel (chat UX)
 

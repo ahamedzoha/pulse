@@ -14,6 +14,11 @@ import {
 import { env } from '../config/env';
 import { DatabaseService } from '../database/database.service';
 import { DashScopeService } from '../llm/dashscope.service';
+import {
+  enrichEventContent,
+  formatHealthSnapshot,
+} from './health-context';
+import { INTEL_SYSTEM_PROMPT } from './prompts';
 
 export interface LeaderboardEntry {
   id: string;
@@ -36,6 +41,7 @@ export interface SourceChunk {
   taskId: string;
   title: string;
   status: string;
+  healthScore: number;
   contentText: string;
   score: number;
 }
@@ -44,6 +50,7 @@ interface SearchRow {
   task_id: string;
   title: string;
   status: string;
+  health_score: number;
   content_text: string;
   score: number;
 }
@@ -310,7 +317,7 @@ export class IntelService {
 
     const literal = `[${vector.join(',')}]`;
     const { rows } = await this.db.query<SearchRow>(
-      `SELECT ee.task_id, t.title, t.status, ee.content_text,
+      `SELECT ee.task_id, t.title, t.status, t.health_score, ee.content_text,
               1 - (ee.embedding <=> $1::vector) AS score
          FROM event_embeddings ee
          JOIN tasks t ON t.id = ee.task_id
@@ -326,7 +333,12 @@ export class IntelService {
         taskId: r.task_id,
         title: r.title,
         status: r.status,
-        contentText: r.content_text,
+        healthScore: r.health_score,
+        contentText: enrichEventContent(
+          r.content_text,
+          r.health_score,
+          r.status,
+        ),
         score: Number(r.score),
       })),
     };
@@ -338,23 +350,21 @@ export class IntelService {
     sources: SourceChunk[],
     history: Array<{ question: string; answer: string }>,
   ): AsyncGenerator<string> {
-    const context = sources.length
+    const healthSnapshot = await this.leaderboard(15);
+    const healthBlock = formatHealthSnapshot(healthSnapshot);
+
+    const eventContext = sources.length
       ? sources
-          .map((s, i) => `[${i + 1}] (${s.status}) ${s.contentText}`)
+          .map(
+            (s, i) =>
+              `[${i + 1}] Task "${s.title}" · ${s.contentText}`,
+          )
           .join('\n')
-      : '(no relevant activity found)';
+      : '(no semantically matched activity events)';
 
     type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
     const messages: Msg[] = [
-      {
-        role: 'system',
-        content:
-          'You are Pulse Intel, an assistant that answers questions about a team task ' +
-          'board. Use the retrieved activity context for factual answers about tasks and ' +
-          'events. Use prior conversation turns for follow-up questions and continuity. ' +
-          "If the context doesn't contain the answer, say you don't have enough information. " +
-          'Be concise.',
-      },
+      { role: 'system', content: INTEL_SYSTEM_PROMPT },
     ];
 
     for (const turn of history) {
@@ -365,7 +375,10 @@ export class IntelService {
     messages.push({
       role: 'user',
       content:
-        `Retrieved activity context for this question:\n${context}\n\n` +
+        `Current task health snapshot (lowest first — matches Intel leaderboard):\n` +
+        `${healthBlock}\n\n` +
+        `Retrieved activity events (semantic match for this question):\n` +
+        `${eventContext}\n\n` +
         `Question: ${question}`,
     });
 

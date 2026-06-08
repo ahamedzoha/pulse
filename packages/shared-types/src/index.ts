@@ -70,6 +70,8 @@ export interface IntelChatSource {
   taskId: string;
   title: string;
   status: string;
+  /** Current task health at query time (joined from tasks.health_score). */
+  healthScore?: number;
   contentText: string;
   score: number;
 }
