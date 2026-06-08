@@ -1,4 +1,9 @@
-import type { Mood, Role, TaskStatus } from '@pulse/shared-types';
+import type {
+  IntelTaskEvent,
+  Mood,
+  Role,
+  TaskStatus,
+} from '@pulse/shared-types';
 import { API_URL } from './config';
 import { getToken } from './auth';
 
@@ -57,6 +62,13 @@ export function fetchMe(): Promise<User> {
 
 export function fetchTasks(): Promise<Task[]> {
   return apiFetch('/tasks');
+}
+
+export type TaskEventItem = IntelTaskEvent;
+
+/** Activity history (comments + status/assignee changes) for a task. */
+export function fetchTaskEvents(id: string): Promise<TaskEventItem[]> {
+  return apiFetch(`/tasks/${id}/events`);
 }
 
 export function fetchUsers(): Promise<UserOption[]> {

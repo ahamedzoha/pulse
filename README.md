@@ -236,7 +236,7 @@ User question (Intel AI panel)
     → Load prior chat turns from DB (multi-turn context)
     → Load live health snapshot (top 15 tasks, lowest health first — same as leaderboard)
     → Embed question (text-embedding-v4)
-    → pgvector similarity search (top 10, cosine)
+    → pgvector similarity search (top 10, cosine), drop chunks below RAG_MIN_SCORE
     → Join tasks.health_score into each source; prefix content with health + status
     → Prompt Qwen with system + history + health snapshot + enriched events + question
     → Stream response to UI; persist turn in intel_chat_turns

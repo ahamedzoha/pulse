@@ -173,7 +173,7 @@ export default function BoardPage() {
           New task
         </button>
       </div>
-      <main className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6">
+      <main className="pulse-scroll min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6">
         <div className="flex h-full min-h-[400px] gap-4">
           {TASK_STATUSES.map((status) => (
             <KanbanColumn

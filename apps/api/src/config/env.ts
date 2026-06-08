@@ -51,6 +51,13 @@ export const env = {
     llmModel: optional('LLM_MODEL', 'qwen-plus'),
   },
 
+  rag: {
+    // Minimum cosine similarity (0–1) for a retrieved chunk to be sent to the
+    // LLM. Drops weakly-matched events so they don't dilute the prompt. Tune
+    // empirically against real data — too high starves the answer of context.
+    minScore: Number(optional('RAG_MIN_SCORE', '0.25')),
+  },
+
   entra: {
     tenantId: required('ENTRA_TENANT_ID'),
     clientId: required('ENTRA_CLIENT_ID'),

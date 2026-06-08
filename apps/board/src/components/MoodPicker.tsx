@@ -3,6 +3,25 @@
 import type { ReactNode } from 'react';
 import { MOODS, type Mood } from '@pulse/shared-types';
 
+/** Shared face base — eyes + a mouth path that conveys the energy level. */
+function Face({ mouth }: { mouth: ReactNode }) {
+  return (
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9.25" />
+      <circle cx="8.75" cy="10" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="15.25" cy="10" r="0.9" fill="currentColor" stroke="none" />
+      {mouth}
+    </svg>
+  );
+}
+
 const config: Record<
   Mood,
   { label: string; ring: string; active: string; icon: ReactNode }
@@ -12,9 +31,11 @@ const config: Record<
     ring: 'ring-emerald-500/40',
     active: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-200',
     icon: (
-      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5 10.5 6.75 14.25 10.5 21 3.75M3.75 19.5h16.5" />
-      </svg>
+      <Face
+        mouth={
+          <path strokeLinecap="round" d="M8 14a4 4 0 0 0 8 0" />
+        }
+      />
     ),
   },
   medium: {
@@ -22,9 +43,11 @@ const config: Record<
     ring: 'ring-sky-500/40',
     active: 'border-sky-500/50 bg-sky-500/15 text-sky-200',
     icon: (
-      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-      </svg>
+      <Face
+        mouth={
+          <path strokeLinecap="round" d="M9 14.25q3 1.5 6 0" />
+        }
+      />
     ),
   },
   low: {
@@ -32,10 +55,11 @@ const config: Record<
     ring: 'ring-red-500/40',
     active: 'border-red-500/50 bg-red-500/15 text-red-200',
     icon: (
-      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9.563C9 8.252 10.248 7 11.5 7S14 8.252 14 9.563 12.752 12 11.5 12 9 10.874 9 9.563ZM9 15h5" />
-      </svg>
+      <Face
+        mouth={
+          <path strokeLinecap="round" d="M8 15.5a4 4 0 0 1 8 0" />
+        }
+      />
     ),
   },
   neutral: {
@@ -43,9 +67,7 @@ const config: Record<
     ring: 'ring-slate-500/40',
     active: 'border-slate-500/50 bg-slate-500/15 text-slate-200',
     icon: (
-      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
-      </svg>
+      <Face mouth={<path strokeLinecap="round" d="M9 14.75h6" />} />
     ),
   },
 };
@@ -59,8 +81,12 @@ interface Props {
 export function MoodPicker({ value, onChange, label = 'Mood' }: Props) {
   return (
     <div>
-      <span className="pulse-label">{label}</span>
-      <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
+      {label && <span className="pulse-label">{label}</span>}
+      <div
+        className="grid grid-cols-4 gap-1.5"
+        role="radiogroup"
+        aria-label={label}
+      >
         {MOODS.map((m) => {
           const c = config[m];
           const selected = value === m;
@@ -68,16 +94,18 @@ export function MoodPicker({ value, onChange, label = 'Mood' }: Props) {
             <button
               key={m}
               type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={c.label}
               onClick={() => onChange(m)}
-              aria-pressed={selected}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent ${
+              className={`flex cursor-pointer flex-col items-center gap-1 rounded-xl border px-2 py-2.5 transition-all duration-200 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pulse-accent ${
                 selected
-                  ? `${c.active} ring-2 ${c.ring}`
-                  : 'border-white/8 bg-pulse-elevated/60 text-pulse-muted hover:border-white/15 hover:text-slate-200'
+                  ? `${c.active} scale-[1.03] ring-2 ${c.ring}`
+                  : 'border-white/8 bg-pulse-elevated/50 text-pulse-muted hover:-translate-y-0.5 hover:border-white/15 hover:text-slate-200'
               }`}
             >
               {c.icon}
-              {c.label}
+              <span className="text-[10px] font-medium">{c.label}</span>
             </button>
           );
         })}

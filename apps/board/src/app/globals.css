@@ -113,6 +113,47 @@
   animation: pulse-glow 2.5s ease-in-out infinite;
 }
 
+/* Thin, themed scrollbar — subtle by default, clearer on hover. */
+.pulse-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.12) transparent;
+}
+
+.pulse-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pulse-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pulse-scroll::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.1);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.pulse-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.22);
+  background-clip: padding-box;
+}
+
+/* Soft bottom fade — signals "more below" without a hard cutoff. */
+.pulse-scroll-fade {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pulse-fade-in,
   .pulse-modal-in,

@@ -57,7 +57,7 @@ export function KanbanColumn({ status, tasks, assigneeNames, onTaskClick }: Prop
           {tasks.length}
         </span>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-3 pb-3">
+      <div className="pulse-scroll pulse-scroll-fade flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain py-1 pl-3 pr-2">
         {tasks.map((t, i) => (
           <TaskCard
             key={t.id}

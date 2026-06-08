@@ -106,7 +106,7 @@ Workers JOIN `tasks` + `users` by `taskId`/`actorId` to enrich context — queue
 
 ### SSE realtime (Intel feed)
 
-Simple EventEmitter pattern in the task-events processor. Intel endpoint: `GET /intel/feed` — SSE stream (unauthenticated POC); `GET /intel/feed/recent` hydrates history on load. No reconnect logic (POC scope).
+Simple EventEmitter pattern in the task-events processor. Intel endpoint: `GET /intel/feed` — SSE stream, JWT-guarded via `?token=` (EventSource can't send headers; `JwtStrategy` reads the query param, see `apps/api/src/auth/jwt.strategy.ts`); `GET /intel/feed/recent` hydrates history on load. No reconnect logic (POC scope).
 
 ### RAG flow
 

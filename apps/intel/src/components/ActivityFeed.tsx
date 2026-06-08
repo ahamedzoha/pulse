@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fetchRecentFeed, type FeedItem } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 import { API_URL } from '@/lib/config';
 import { Panel } from './Panel';
 import { LiveActivityToastStack, type ActivityToast } from './LiveActivityToast';
@@ -119,7 +120,11 @@ export function ActivityFeed() {
         }
       });
 
-    const es = new EventSource(`${API_URL}/intel/feed`);
+    const token = getToken();
+    const feedUrl = token
+      ? `${API_URL}/intel/feed?token=${encodeURIComponent(token)}`
+      : `${API_URL}/intel/feed`;
+    const es = new EventSource(feedUrl);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
     es.onmessage = (ev) => {

@@ -6,10 +6,18 @@ interface Props {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  maxWidth?: 'md' | 'lg';
+  maxWidth?: 'md' | 'lg' | 'xl';
+  /** Optional node rendered in the header, right of the title (e.g. a badge). */
+  headerAccessory?: ReactNode;
 }
 
-export function Modal({ title, onClose, children, maxWidth = 'lg' }: Props) {
+export function Modal({
+  title,
+  onClose,
+  children,
+  maxWidth = 'lg',
+  headerAccessory,
+}: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -22,7 +30,12 @@ export function Modal({ title, onClose, children, maxWidth = 'lg' }: Props) {
     };
   }, [onClose]);
 
-  const maxW = maxWidth === 'md' ? 'max-w-md' : 'max-w-lg';
+  const maxW =
+    maxWidth === 'md'
+      ? 'max-w-md'
+      : maxWidth === 'xl'
+        ? 'max-w-2xl'
+        : 'max-w-lg';
 
   return (
     <div
@@ -40,10 +53,16 @@ export function Modal({ title, onClose, children, maxWidth = 'lg' }: Props) {
       <div
         className={`pulse-modal-in relative flex max-h-[90vh] w-full ${maxW} flex-col overflow-hidden rounded-2xl border border-white/10 bg-pulse-panel shadow-2xl shadow-black/50`}
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-white/6 px-5 py-4">
-          <h2 id="modal-title" className="text-base font-semibold text-white">
-            {title}
-          </h2>
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <h2
+              id="modal-title"
+              className="truncate text-base font-semibold text-white"
+            >
+              {title}
+            </h2>
+            {headerAccessory}
+          </div>
           <button
             type="button"
             onClick={onClose}

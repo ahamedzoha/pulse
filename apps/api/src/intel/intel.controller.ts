@@ -53,10 +53,11 @@ export class IntelController {
 
   /**
    * Live activity feed. Native EventSource can't send Authorization headers,
-   * so this stream is unauthenticated for the POC (data is non-sensitive
-   * activity). Token-via-query can be added with the Intel UI.
+   * so the session JWT is passed as `?token=` and validated by the same
+   * JwtAuthGuard as every other endpoint (see JwtStrategy extractors).
    */
   @Sse('feed')
+  @UseGuards(JwtAuthGuard)
   feed(): Observable<MessageEvent> {
     return this.realtime.stream$.pipe(map((item) => ({ data: item })));
   }

@@ -9,7 +9,13 @@ import type { AuthUser, SessionJwtPayload } from './auth.types';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Header is the norm for REST. The `?token=` fallback exists because the
+      // native EventSource API (Intel SSE feed) can't set an Authorization
+      // header — same JWT, just carried in the query string for that one case.
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        ExtractJwt.fromUrlQueryParameter('token'),
+      ]),
       ignoreExpiration: false,
       secretOrKey: env.jwtSecret,
     });

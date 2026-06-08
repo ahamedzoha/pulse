@@ -36,6 +36,11 @@ export class TasksController {
     return this.tasks.getById(id);
   }
 
+  @Get(':id/events')
+  listEvents(@Param('id', ParseUUIDPipe) id: string) {
+    return this.tasks.listEvents(id);
+  }
+
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
     return this.tasks.create(user.userId, dto);

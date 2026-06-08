@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { PoolClient } from 'pg';
-import type { TaskStatus } from '@pulse/shared-types';
+import type {
+  EventType,
+  IntelTaskEvent,
+  Mood,
+  TaskStatus,
+} from '@pulse/shared-types';
 import { DatabaseService } from '../database/database.service';
 import { EventsService } from '../events/events.service';
 import { QueueService } from '../queue/queue.service';
@@ -43,6 +48,45 @@ export class TasksService {
     );
     if (!rows[0]) throw new NotFoundException('Task not found');
     return rows[0];
+  }
+
+  /** Activity history for a task (newest first) — powers the Board timeline. */
+  async listEvents(taskId: string): Promise<IntelTaskEvent[]> {
+    const exists = await this.db.query('SELECT 1 FROM tasks WHERE id = $1', [
+      taskId,
+    ]);
+    if (!exists.rows[0]) throw new NotFoundException('Task not found');
+
+    const { rows } = await this.db.query<{
+      id: string;
+      event_type: EventType;
+      old_value: string | null;
+      new_value: string | null;
+      comment_text: string | null;
+      mood: Mood;
+      occurred_at: Date;
+      actor_name: string;
+    }>(
+      `SELECT te.id, te.event_type, te.old_value, te.new_value, te.comment_text,
+              te.mood, te.occurred_at, u.display_name AS actor_name
+         FROM task_events te
+         JOIN users u ON u.id = te.actor_id
+        WHERE te.task_id = $1
+        ORDER BY te.occurred_at DESC
+        LIMIT 100`,
+      [taskId],
+    );
+
+    return rows.map((r) => ({
+      id: r.id,
+      eventType: r.event_type,
+      actorName: r.actor_name,
+      oldValue: r.old_value ?? undefined,
+      newValue: r.new_value ?? undefined,
+      commentText: r.comment_text ?? undefined,
+      mood: r.mood,
+      occurredAt: r.occurred_at.toISOString(),
+    }));
   }
 
   async create(actorId: string, dto: CreateTaskDto): Promise<TaskRow> {

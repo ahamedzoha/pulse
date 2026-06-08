@@ -327,21 +327,30 @@ export class IntelService {
       [literal, limit],
     );
 
-    return {
-      embedded: true,
-      sources: rows.map((r) => ({
+    // Rows are distance-ordered, so chunks below the relevance floor form a
+    // tail we drop — keeps low-similarity events out of the LLM prompt.
+    const minScore = env.rag.minScore;
+    const sources: SourceChunk[] = [];
+    for (const r of rows) {
+      const score = Number(r.score);
+      if (score < minScore) continue;
+      sources.push({
         taskId: r.task_id,
         title: r.title,
         status: r.status,
         healthScore: r.health_score,
-        contentText: enrichEventContent(
-          r.content_text,
-          r.health_score,
-          r.status,
-        ),
-        score: Number(r.score),
-      })),
-    };
+        contentText: enrichEventContent(r.content_text, r.health_score, r.status),
+        score,
+      });
+    }
+
+    if (sources.length < rows.length) {
+      this.logger.log(
+        `RAG relevance floor ${minScore}: kept ${sources.length}/${rows.length} chunks`,
+      );
+    }
+
+    return { embedded: true, sources };
   }
 
   /** Stream a grounded answer from Qwen using RAG context + prior chat turns. */

@@ -15,8 +15,8 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   });
 
-  await app.listen(env.apiPort);
-  new Logger('Bootstrap').log(`API listening on http://localhost:${env.apiPort}`);
+  await app.listen(env.apiPort, '0.0.0.0');
+  new Logger('Bootstrap').log(`API listening on http://0.0.0.0:${env.apiPort}`);
 }
 
 void bootstrap();
