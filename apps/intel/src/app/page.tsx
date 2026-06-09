@@ -13,7 +13,8 @@ import { AiPanel } from '@/components/AiPanel';
 import { AuthScreen } from '@/components/AuthScreen';
 import { Header } from '@/components/Header';
 import { Leaderboard } from '@/components/Leaderboard';
-import { MomentumMeter } from '@/components/MomentumMeter';
+import { MoodMap } from '@/components/MoodMap';
+import { RealtimeProvider } from '@/components/RealtimeProvider';
 import { Spinner } from '@/components/Spinner';
 import { TaskDetailProvider } from '@/components/TaskDetailContext';
 
@@ -73,6 +74,7 @@ export default function IntelPage() {
 
   return (
     <TaskDetailProvider>
+      <RealtimeProvider>
       <div className="flex h-dvh flex-col overflow-hidden">
         <Header user={user} />
         {/*
@@ -83,7 +85,7 @@ export default function IntelPage() {
           Mobile: AI first, then insights stack
         */}
         <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 lg:gap-4 lg:overflow-hidden lg:p-4">
-          <MomentumMeter />
+          <MoodMap />
 
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
             <div className="order-1 flex min-h-[min(52vh,520px)] flex-col lg:order-2 lg:col-span-7 lg:min-h-0">
@@ -101,6 +103,7 @@ export default function IntelPage() {
           </div>
         </main>
       </div>
+      </RealtimeProvider>
     </TaskDetailProvider>
   );
 }

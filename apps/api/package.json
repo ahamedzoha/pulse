@@ -7,6 +7,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
+    "backfill:sentiment": "node dist/backfill-sentiment.js",
     "lint": "echo 'eslint not configured for this POC'",
     "typecheck": "tsc --noEmit"
   },

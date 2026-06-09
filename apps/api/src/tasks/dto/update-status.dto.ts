@@ -1,4 +1,4 @@
-import { IsIn } from 'class-validator';
+import { IsIn, IsOptional } from 'class-validator';
 import {
   MOODS,
   TASK_STATUSES,
@@ -10,6 +10,8 @@ export class UpdateStatusDto {
   @IsIn([...TASK_STATUSES])
   status!: TaskStatus;
 
+  // Omit to auto-derive energy from sentiment; present = manual override.
+  @IsOptional()
   @IsIn([...MOODS])
-  mood: Mood = 'neutral';
+  mood?: Mood;
 }

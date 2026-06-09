@@ -1,15 +1,20 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   INTEL_CHAT_LLM_HISTORY_LIMIT,
+  MOOD_ENERGY,
   MOOD_WEIGHTS,
+  classifyVibe,
   type ActivityFeedItem,
   type EventType,
   type IntelChatSource,
   type IntelChatTurn,
   type IntelTaskDetail,
   type IntelTaskEvent,
+  type Momentum2D,
   type Mood,
+  type SentimentSource,
   type TaskStatus,
+  type Vibe,
 } from '@pulse/shared-types';
 import { env } from '../config/env';
 import { DatabaseService } from '../database/database.service';
@@ -75,14 +80,22 @@ export class IntelService {
       new_value: string | null;
       comment_text: string | null;
       mood: Mood;
+      mood_manual: boolean;
+      sentiment: number | null;
+      sentiment_src: SentimentSource | null;
+      emotions: string[] | null;
       occurred_at: Date;
       task_title: string;
       task_status: TaskStatus;
+      health_score: number;
       actor_name: string;
     }>(
       `SELECT te.id, te.task_id, te.actor_id, te.event_type,
-              te.old_value, te.new_value, te.comment_text, te.mood, te.occurred_at,
+              te.old_value, te.new_value, te.comment_text, te.mood,
+              te.mood_manual, te.sentiment, te.sentiment_src, te.emotions,
+              te.occurred_at,
               t.title AS task_title, t.status AS task_status,
+              t.health_score AS health_score,
               u.display_name AS actor_name
          FROM task_events te
          JOIN tasks t ON t.id = te.task_id
@@ -101,9 +114,14 @@ export class IntelService {
       newValue: r.new_value ?? undefined,
       commentText: r.comment_text ?? undefined,
       mood: r.mood,
+      moodManual: r.mood_manual,
+      sentiment: r.sentiment,
+      sentimentSource: r.sentiment_src ?? undefined,
+      emotions: r.emotions ?? undefined,
       occurredAt: r.occurred_at.toISOString(),
       taskTitle: r.task_title,
       taskStatus: r.task_status,
+      healthScore: r.health_score,
       actorName: r.actor_name,
     }));
   }
@@ -143,11 +161,15 @@ export class IntelService {
       new_value: string | null;
       comment_text: string | null;
       mood: Mood;
+      sentiment: number | null;
+      sentiment_src: SentimentSource | null;
+      emotions: string[] | null;
       occurred_at: Date;
       actor_name: string;
     }>(
       `SELECT te.id, te.event_type, te.old_value, te.new_value, te.comment_text,
-              te.mood, te.occurred_at, u.display_name AS actor_name
+              te.mood, te.sentiment, te.sentiment_src, te.emotions, te.occurred_at,
+              u.display_name AS actor_name
          FROM task_events te
          JOIN users u ON u.id = te.actor_id
         WHERE te.task_id = $1
@@ -164,6 +186,9 @@ export class IntelService {
       newValue: r.new_value ?? undefined,
       commentText: r.comment_text ?? undefined,
       mood: r.mood,
+      sentiment: r.sentiment,
+      sentimentSource: r.sentiment_src ?? undefined,
+      emotions: r.emotions ?? undefined,
       occurredAt: r.occurred_at.toISOString(),
     }));
 
@@ -225,6 +250,49 @@ export class IntelService {
     return {
       average: Math.round(average * 100) / 100,
       percentage: Math.round((average / max) * 100),
+      eventCount: rows.length,
+    };
+  }
+
+  /**
+   * Team affect over the last 24h on the valence × energy plane.
+   * Valence averages scored events; energy comes from the mood enum; each
+   * event is bucketed into its quadrant for the breakdown.
+   */
+  async momentum2d(): Promise<Momentum2D> {
+    const { rows } = await this.db.query<{ mood: Mood; sentiment: number | null }>(
+      `SELECT mood, sentiment FROM task_events
+        WHERE occurred_at >= now() - interval '24 hours'`,
+    );
+
+    const quadrants: Record<Vibe, number> = {
+      in_flow: 0,
+      firefighting: 0,
+      cruising: 0,
+      stalled: 0,
+    };
+
+    if (!rows.length) {
+      return { valence: 0, energy: 0.4, vibe: classifyVibe(0, 0.4), quadrants, eventCount: 0 };
+    }
+
+    const scored = rows.filter((r) => r.sentiment != null);
+    const valence = scored.length
+      ? scored.reduce((acc, r) => acc + Number(r.sentiment), 0) / scored.length
+      : 0;
+    const energy =
+      rows.reduce((acc, r) => acc + MOOD_ENERGY[r.mood], 0) / rows.length;
+
+    for (const r of rows) {
+      quadrants[classifyVibe(r.sentiment != null ? Number(r.sentiment) : 0, MOOD_ENERGY[r.mood])]++;
+    }
+
+    const round = (n: number) => Math.round(n * 1000) / 1000;
+    return {
+      valence: round(valence),
+      energy: round(energy),
+      vibe: classifyVibe(valence, energy),
+      quadrants,
       eventCount: rows.length,
     };
   }

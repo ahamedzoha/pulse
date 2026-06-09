@@ -48,6 +48,11 @@ CREATE TABLE task_events (
   comment_text  text,
   mood          text NOT NULL DEFAULT 'neutral'
                 CHECK (mood IN ('high', 'medium', 'low', 'neutral')),
+  -- Multi-dimensional mood: energy = mood (above), valence = sentiment.
+  mood_manual   boolean NOT NULL DEFAULT false,  -- true = user override; LLM won't touch mood
+  sentiment     real CHECK (sentiment IS NULL OR (sentiment >= -1 AND sentiment <= 1)),
+  sentiment_src text CHECK (sentiment_src IS NULL OR sentiment_src IN ('lexicon', 'llm')),
+  emotions      jsonb,                            -- LLM discrete emotions, e.g. ["frustrated"]
   occurred_at   timestamptz NOT NULL DEFAULT now()
 );
 

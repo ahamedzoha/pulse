@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker exec *)",
+      "Bash(curl -s --retry 30 --retry-delay 1 --retry-all-errors --retry-connrefused -m 3 http://localhost:4000/health)",
+      "Bash(curl -s -o /dev/null -w \"momentum2d: HTTP %{http_code}\\\\n\" -m 3 http://localhost:4000/intel/momentum2d)",
+      "Bash(kill 43696)",
+      "Bash(xargs -r kill)",
+      "Bash(pkill -f 'apps/api/.*nest.js start')",
+      "Bash(node --enable-source-maps /Users/zoha/Code/pulse/apps/api/dist/main)",
+      "Bash(curl -s --retry 40 --retry-delay 1 --retry-all-errors --retry-connrefused -m 3 http://localhost:4000/health)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" -m 3 http://localhost:4000/intel/momentum2d)",
+      "Bash(node -e ' *)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -m 5 -H 'authorization: Bearer __TRACKED_VAR__' http://localhost:4000/auth/me)",
+      "Bash(curl -s -m 5 -H 'authorization: Bearer __TRACKED_VAR__' http://localhost:4000/intel/momentum2d)",
+      "Bash(curl -s -m 5 -H 'authorization: Bearer __CMDSUB_OUTPUT__' http://localhost:4000/intel/momentum2d)",
+      "Bash(pnpm --filter @pulse/api backfill:sentiment -- --llm)",
+      "Bash(grep -vE '^\\(>|$\\)')",
+      "Bash(TOKEN=$\\(cat /tmp/pulse-test-token\\) *)",
+      "Bash(node -e 'try{const e=JSON.parse\\(require\\(\"fs\"\\).readFileSync\\(0,\"utf8\"\\)\\);console.log\\(JSON.stringify\\({type:e.eventType,task:e.taskTitle,actor:e.actorName,mood:e.mood,sentiment:e.sentiment,source:e.sentimentSource,emotions:e.emotions,healthScore:e.healthScore},null,0\\)\\);}catch\\(err\\){console.log\\(\"\\(no frame captured\\)\"\\)}')",
+      "Bash(curl -s -m 3 http://localhost:4000/health)",
+      "Bash(node -e \"const s=require\\('./package.json'\\).scripts; for\\(const k of Object.keys\\(s\\)\\) if\\(/seed|backfill|infra|dev/.test\\(k\\)\\) console.log\\(k+': '+s[k]\\)\")"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

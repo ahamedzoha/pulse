@@ -83,6 +83,13 @@ export class IntelController {
     return this.intel.momentum();
   }
 
+  /** Team affect on the valence × energy plane (24h). All authenticated roles. */
+  @Get('momentum2d')
+  @UseGuards(JwtAuthGuard)
+  momentum2d() {
+    return this.intel.momentum2d();
+  }
+
   /**
    * RAG Q&A with multi-turn context. Embeds the question → pgvector top-K →
    * streams a grounded Qwen answer. Persists each turn per user; prior turns

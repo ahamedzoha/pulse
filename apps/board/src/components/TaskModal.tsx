@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { TASK_STATUSES, type Mood, type TaskStatus } from '@pulse/shared-types';
 import { fetchTaskEvents, type Task, type TaskEventItem, type UserOption } from '@/lib/api';
 import { healthColor } from '@/lib/health';
@@ -8,7 +8,7 @@ import { formatRelativeTime } from '@/lib/time';
 import { ActivityTimeline } from './ActivityTimeline';
 import { HealthBadge } from './HealthBadge';
 import { Modal } from './Modal';
-import { MoodPicker } from './MoodPicker';
+import { MoodField } from './MoodField';
 import { Spinner } from './Spinner';
 import { UserAvatar } from './UserAvatar';
 
@@ -63,9 +63,9 @@ interface Props {
   users: UserOption[];
   onClose: () => void;
   onUpdate: () => Promise<void>;
-  onStatus: (status: TaskStatus, mood: Mood) => Promise<void>;
-  onComment: (text: string, mood: Mood) => Promise<void>;
-  onReassign: (assigneeId: string, mood: Mood) => Promise<void>;
+  onStatus: (status: TaskStatus, mood?: Mood) => Promise<void>;
+  onComment: (text: string, mood?: Mood) => Promise<void>;
+  onReassign: (assigneeId: string, mood?: Mood) => Promise<void>;
 }
 
 export function TaskModal({
@@ -78,7 +78,7 @@ export function TaskModal({
   onReassign,
 }: Props) {
   const [tab, setTab] = useState<Tab>('comment');
-  const [mood, setMood] = useState<Mood>('neutral');
+  const [mood, setMood] = useState<Mood | undefined>(undefined);
   const [comment, setComment] = useState('');
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [assigneeId, setAssigneeId] = useState(task.assignee_id ?? '');
@@ -87,6 +87,8 @@ export function TaskModal({
 
   const [events, setEvents] = useState<TaskEventItem[] | null>(null);
   const [eventsError, setEventsError] = useState('');
+  const [refining, setRefining] = useState(false);
+  const refineTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const assignee = users.find((u) => u.id === task.assignee_id);
   const color = healthColor(task.health_score);
@@ -103,6 +105,37 @@ export function TaskModal({
   useEffect(() => {
     void loadEvents();
   }, [loadEvents]);
+
+  // A posted comment is scored instantly by the lexicon, then refined by the
+  // LLM in the worker (energy + emotions). Poll a few times to swap the
+  // baseline for the refined result without making the user reopen the task.
+  const pollForRefine = useCallback(() => {
+    refineTimers.current.forEach(clearTimeout);
+    setRefining(true);
+
+    const delays = [1500, 3500, 6500];
+    const attempt = async (i: number) => {
+      try {
+        const fresh = await fetchTaskEvents(task.id);
+        setEvents(fresh);
+        const latest = fresh.find((e) => e.eventType === 'commented');
+        if (latest?.sentimentSource === 'llm') {
+          refineTimers.current.forEach(clearTimeout);
+          setRefining(false);
+          return;
+        }
+      } catch {
+        /* keep the instant lexicon read on failure */
+      }
+      if (i === delays.length - 1) setRefining(false);
+    };
+
+    refineTimers.current = delays.map((d, i) =>
+      setTimeout(() => void attempt(i), d),
+    );
+  }, [task.id]);
+
+  useEffect(() => () => refineTimers.current.forEach(clearTimeout), []);
 
   // Keep pending selections in sync if the task changes underneath us.
   useEffect(() => {
@@ -133,7 +166,7 @@ export function TaskModal({
             run(async () => {
               await onComment(comment.trim(), mood);
               setComment('');
-            }),
+            }).then(() => pollForRefine()),
         }
       : tab === 'status'
         ? {
@@ -283,7 +316,7 @@ export function TaskModal({
           )}
 
           <div className="mt-3">
-            <MoodPicker value={mood} onChange={setMood} label="Mood for this update" />
+            <MoodField value={mood} onChange={setMood} autoHint="inferred from your update" />
           </div>
 
           <button
@@ -312,6 +345,12 @@ export function TaskModal({
             {events && (
               <span className="rounded-full bg-white/8 px-1.5 py-0.5 tabular-nums text-slate-400">
                 {events.length}
+              </span>
+            )}
+            {refining && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-normal normal-case text-pulse-glow">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pulse-glow" aria-hidden />
+                reading sentiment…
               </span>
             )}
           </h3>

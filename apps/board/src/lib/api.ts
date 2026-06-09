@@ -75,11 +75,13 @@ export function fetchUsers(): Promise<UserOption[]> {
   return apiFetch('/users');
 }
 
+// `mood` is optional everywhere: omit it to let the server auto-derive energy
+// from sentiment; include it only when the user explicitly overrides.
 export function createTask(input: {
   title: string;
   description?: string;
   assigneeId?: string;
-  mood: Mood;
+  mood?: Mood;
 }): Promise<Task> {
   return apiFetch('/tasks', {
     method: 'POST',
@@ -87,7 +89,7 @@ export function createTask(input: {
       title: input.title,
       description: input.description,
       assigneeId: input.assigneeId,
-      mood: input.mood,
+      ...(input.mood ? { mood: input.mood } : {}),
     }),
   });
 }
@@ -95,32 +97,32 @@ export function createTask(input: {
 export function updateStatus(
   id: string,
   status: TaskStatus,
-  mood: Mood,
+  mood?: Mood,
 ): Promise<Task> {
   return apiFetch(`/tasks/${id}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status, mood }),
+    body: JSON.stringify({ status, ...(mood ? { mood } : {}) }),
   });
 }
 
 export function addComment(
   id: string,
   commentText: string,
-  mood: Mood,
+  mood?: Mood,
 ): Promise<Task> {
   return apiFetch(`/tasks/${id}/comments`, {
     method: 'POST',
-    body: JSON.stringify({ commentText, mood }),
+    body: JSON.stringify({ commentText, ...(mood ? { mood } : {}) }),
   });
 }
 
 export function reassignTask(
   id: string,
   assigneeId: string,
-  mood: Mood,
+  mood?: Mood,
 ): Promise<Task> {
   return apiFetch(`/tasks/${id}/assignee`, {
     method: 'PATCH',
-    body: JSON.stringify({ assigneeId, mood }),
+    body: JSON.stringify({ assigneeId, ...(mood ? { mood } : {}) }),
   });
 }

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { Mood } from '@pulse/shared-types';
 import type { UserOption } from '@/lib/api';
 import { Modal } from './Modal';
-import { MoodPicker } from './MoodPicker';
+import { MoodField } from './MoodField';
 import { UserAvatar } from './UserAvatar';
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
     title: string;
     description?: string;
     assigneeId?: string;
-    mood: Mood;
+    mood?: Mood;
   }) => Promise<void>;
 }
 
@@ -22,7 +22,7 @@ export function CreateTaskModal({ users, onClose, onCreate }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
-  const [mood, setMood] = useState<Mood>('neutral');
+  const [mood, setMood] = useState<Mood | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -113,7 +113,7 @@ export function CreateTaskModal({ users, onClose, onCreate }: Props) {
           </div>
         </div>
 
-        <MoodPicker value={mood} onChange={setMood} label="Starting mood" />
+        <MoodField value={mood} onChange={setMood} autoHint="mood updates as the task gets comments" />
 
         {error && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-300">

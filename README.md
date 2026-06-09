@@ -2,7 +2,13 @@
 
 **Purpose:** A self-contained warm-up build that practices the architectural patterns used in RBDOps AI — event ingestion, queue workers, RAG over activity history, Entra SSO/RBAC — without the complexity of the full client system.
 
-> **Status:** Demo POC — Board, Intel, API, workers, and RAG chat are implemented. See [Build Order](#11-build-order).
+> **Status:** Demo POC — Board, Intel, API, workers, RAG chat, and **dynamic multi-dimensional mood** (hybrid sentiment + health → affect plane) are implemented. See [Build Order](#11-build-order).
+>
+> 📐 **Deep dive:** the mood/sentiment model, calculations, and AI features live in **[`docs/mood-intelligence.md`](docs/mood-intelligence.md)**.
+>
+> 🎬 **Demoing it?** Step-by-step presenter runbook in **[`docs/demo-guide.md`](docs/demo-guide.md)**.
+>
+> 🧭 **How it maps to RBDOps AI:** section-by-section PRD alignment in **[`docs/prd-alignment.md`](docs/prd-alignment.md)**.
 
 ---
 
@@ -41,18 +47,23 @@ Every task has a health score (0–100) that degrades when untouched:
 
 Score floors at 0. Cards shift green → amber → red as health drops. Health recomputes **immediately after each task event** (via the queue processor); a **15 min cron** catches anything missed.
 
-### Mood tagging
+### Dynamic, multi-dimensional mood
 
-Every task update carries a mood tag chosen by the user:
+Every task update is read on **three axes**, not one:
 
-| Tag | Label |
-|-----|-------|
-| `high` | High energy |
-| `medium` | Medium energy |
-| `low` | Low energy |
-| `neutral` | Neutral |
+| Axis | Source | Range |
+|------|--------|-------|
+| **Health** | time-decay (above) — objective, *lagging* | 0–100 |
+| **Valence** | sentiment of the comment text — subjective, *leading* | −1..1 |
+| **Energy** | the `mood` enum (`high`/`medium`/`low`/`neutral`) | 0–1 |
 
-The second app watches all activity, embeds events into pgvector, and uses an LLM to answer questions like *"What work has been stalling this week?"*
+Valence + energy form a **circumplex affect plane** with four named vibes — **In flow**, **Cruising**, **Firefighting**, **Stalled** — and health overlays as a third dimension. Sentiment is produced by a **hybrid pipeline**: a classic lexicon scores valence *instantly* on write, then Qwen *refines* it (valence + inferred energy + emotions) asynchronously in the worker. Mood is **auto-derived** (the picker is an optional override).
+
+Keeping the axes separate surfaces **divergence** — e.g. a frustrated comment on a still-green task ("negative tone while health still green") — the early-warning signal a single blended score would hide.
+
+The second app watches all activity, embeds events into pgvector, plots the team on a 2-D **mood map**, flags divergences, and uses an LLM to answer questions like *"What work has been stalling this week?"*
+
+> Full model, formulas, and AI features: **[`docs/mood-intelligence.md`](docs/mood-intelligence.md)**.
 
 ---
 
@@ -60,8 +71,8 @@ The second app watches all activity, embeds events into pgvector, and uses an LL
 
 | App | Path | Port | Users | Description |
 |-----|------|------|-------|-------------|
-| **Pulse Board** | `apps/board` | 3000 | admin, member | Kanban board — create tasks, move statuses, comment with mood tags |
-| **Pulse Intel** | `apps/intel` | 3001 | admin, member, viewer | Live feed, health leaderboard, momentum meter, RAG chat |
+| **Pulse Board** | `apps/board` | 3000 | admin, member | Kanban board — create tasks, move statuses, comment (auto sentiment + optional mood override), activity timeline |
+| **Pulse Intel** | `apps/intel` | 3001 | admin, member, viewer | Live feed (valence + divergence flags), health leaderboard, **2-D mood map**, per-task vibe, RAG chat |
 | **API** | `apps/api` | 4000 | — | Shared NestJS backend |
 
 Entra app registration (single app, validated in NestJS):
@@ -131,8 +142,9 @@ flowchart TB
 | Database | PostgreSQL 16 | `pgvector/pgvector:pg16` image |
 | Vector store | pgvector | 1536-dim embeddings, HNSW index |
 | Queue | BullMQ + Redis (`@nestjs/bullmq`) | One queue (`task-events`), processors per concern |
-| LLM | DashScope `qwen-plus` | OpenAI-compatible SDK, intl endpoint |
+| LLM | DashScope `qwen-plus` | OpenAI-compatible SDK, intl endpoint; RAG + sentiment refine |
 | Embeddings | DashScope `text-embedding-v4` | 1536 dimensions (`text-embedding-v3` caps at 1024) |
+| Sentiment | Classic lexicon (AFINN-style) + Qwen | Hybrid: instant lexicon valence → async LLM refine; see [`docs/mood-intelligence.md`](docs/mood-intelligence.md) |
 | Runtime | Docker Compose | Postgres + Redis only |
 | Monorepo | pnpm workspaces | `@pulse/*` packages |
 
@@ -147,16 +159,19 @@ pulse/
 ├── .env.example
 ├── package.json
 ├── pnpm-workspace.yaml
+├── docs/
+│   └── mood-intelligence.md  # Sentiment/health/affect model + calculations
 ├── apps/
-│   ├── api/                  # NestJS backend
+│   ├── api/                  # NestJS backend (incl. src/sentiment/ — lexicon + LLM)
 │   ├── board/                # Next.js — Pulse Board
 │   └── intel/                # Next.js — Pulse Intel
 ├── packages/
-│   └── shared-types/         # TaskEvent, DTOs, mood enum, constants
+│   └── shared-types/         # TaskEvent, DTOs, mood/sentiment model + vibe helpers
 └── infra/
     ├── docker-compose.yml    # postgres + redis
     └── postgres/
-        └── init.sql          # Schema + extensions
+        ├── init.sql          # Schema + extensions (fresh DBs)
+        └── migrations/       # Incremental migrations (e.g. 002_event_sentiment.sql)
 ```
 
 ---
@@ -169,7 +184,7 @@ Full DDL in `infra/postgres/init.sql`. Summary:
 |-------|---------|
 | `users` | Synced from Entra on first login (`entra_oid`, `role`) |
 | `tasks` | Current task state including `health_score`, `last_activity_at` |
-| `task_events` | Append-only activity log with `mood` |
+| `task_events` | Append-only activity log with `mood` (energy), `sentiment` (valence), `sentiment_src`, `emotions`, `mood_manual` |
 | `event_embeddings` | pgvector RAG store (`vector(1536)`, HNSW cosine index) |
 | `intel_chat_turns` | Per-user Intel AI chat history (question, answer, sources) |
 
@@ -177,8 +192,11 @@ Key enums (enforced via CHECK constraints):
 
 - **Task status:** `todo`, `in_progress`, `review`, `done`
 - **Event type:** `created`, `status_changed`, `commented`, `reassigned`
-- **Mood:** `high`, `medium`, `low`, `neutral`
+- **Mood (energy):** `high`, `medium`, `low`, `neutral`
+- **Sentiment source:** `lexicon`, `llm` (`sentiment` is a `real` in −1..1; nullable)
 - **Role:** `pulse-admin`, `pulse-member`, `pulse-viewer`
+
+> **Migrations:** fresh DBs get everything from `init.sql`. **Existing** DBs must run the incremental migrations in `infra/postgres/migrations/` — notably `002_event_sentiment.sql` adds the sentiment columns (idempotent; `task_events` writes fail without it). See [`docs/mood-intelligence.md` §10](docs/mood-intelligence.md#10-storage).
 
 ---
 
@@ -189,17 +207,26 @@ Key enums (enforced via CHECK constraints):
 ```
 User action (Board)
   → NestJS API
-    → INSERT task_events
+    → score valence instantly (lexicon for comments / transition for status moves)
+    → INSERT task_events (sentiment, sentiment_src='lexicon', mood_manual)
     → UPDATE tasks.last_activity_at
     → BullMQ job: "task-events"
       → task-events processor (single consumer):
-          → embed event → event_embeddings
-          → recompute health_score for that task
-          → SSE push to Intel clients
+          → recompute health_score for that task  (first, so the broadcast is fresh)
+          → LLM refine sentiment → valence + energy(mood) + emotions  (source='llm')
+          → embed event (+ emotions) → event_embeddings
+          → SSE push refined item to Intel clients
       → (cron every 15 min: bulk health recompute as safety net)
 ```
 
-Health formula: `100 - (hours_since_last_activity × decay_rate)`, floored at 0.
+Health formula: `100 - (hours_since_last_activity × decay_rate)`, floored at 0. Sentiment is a two-stage hybrid (instant lexicon → async LLM refine) — full detail in [`docs/mood-intelligence.md`](docs/mood-intelligence.md).
+
+### Mood map & divergence (Intel)
+
+- **2-D mood map** (`GET /intel/momentum2d`) — the team's last-24h activity plotted as a centroid on the valence × energy plane, with per-quadrant counts (In flow / Cruising / Firefighting / Stalled). Replaces the old 1-D momentum meter.
+- **Divergence flags** — feed items and the task drawer surface mismatches between what people *say*, how energetic they *seem*, and the objective health (e.g. *"strain behind high energy"*, *"negative tone while health still green"*).
+- **Per-task vibe** — the drawer derives a vibe + divergence from the task's most recent scored event, alongside per-event valence + emotion tags.
+- **Live updates** — a single shared SSE connection ([`RealtimeProvider`](apps/intel/src/components/RealtimeProvider.tsx)) drives both the feed and a live-refreshing mood map.
 
 ### Intel AI panel (chat)
 
@@ -322,6 +349,21 @@ pnpm seed:demo
 
 `seed:demo` backdates `last_activity_at` per task so target health scores match the decay formula, then derives `health_score` from the same SQL expression the API workers use. See [Troubleshooting](#13-troubleshooting) if health or demo data looks wrong.
 
+**Existing DBs — apply the sentiment migration** (idempotent; required before `task_events` writes work):
+
+```bash
+docker compose -f infra/docker-compose.yml exec -T postgres \
+  psql -U pulse -d pulse < infra/postgres/migrations/002_event_sentiment.sql
+```
+
+**Backfill sentiment** for events created before the feature (so the mood map + divergence have data):
+
+```bash
+pnpm --filter @pulse/api build
+pnpm --filter @pulse/api backfill:sentiment            # lexicon only (instant, free)
+pnpm --filter @pulse/api backfill:sentiment -- --llm   # + LLM energy & emotions
+```
+
 Stop infra:
 
 ```bash
@@ -338,9 +380,12 @@ See `.env.example` for the full list. Key groups:
 |-------|-----------|
 | Database | `DATABASE_URL` |
 | Queue | `REDIS_URL` |
-| DashScope | `DASHSCOPE_API_KEY` |
+| DashScope | `DASHSCOPE_API_KEY` (powers RAG **and** LLM sentiment refine — no separate key) |
+| RAG | `RAG_MIN_SCORE` (relevance floor, default `0.25`) |
 | Entra (single app) | `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` |
 | RBAC groups | `ENTRA_PULSE_ADMIN_GROUP_ID`, `ENTRA_PULSE_MEMBER_GROUP_ID`, `ENTRA_PULSE_VIEWER_GROUP_ID` |
+
+> The lexicon half of sentiment needs no API key — it always runs. Without a valid `DASHSCOPE_API_KEY`, valence still works (lexicon only); energy stays neutral and emotions are empty (graceful degradation).
 
 ### DashScope client setup
 
@@ -369,10 +414,14 @@ Use the **international** endpoint (`dashscope-intl.aliyuncs.com`), not the Chin
 | 6 | RAG query endpoint (`POST /intel/query`, streaming) — see [`docs/dashscope-setup.md`](docs/dashscope-setup.md) | Done |
 | 7 | Board UI (Kanban, health badges, mood picker) | Done |
 | 8 | Intel UI (SSE feed, leaderboard, momentum, AI panel) | Done |
+| 9 | **Dynamic mood — Phase 1:** hybrid sentiment (lexicon + LLM), valence × energy + health, auto-derive/override, schema migration `002`, backfill — see [`docs/mood-intelligence.md`](docs/mood-intelligence.md) | Done |
+| 10 | **Dynamic mood — Phase 2:** Intel 2-D mood map, divergence flags, per-task vibe, shared live SSE | Done |
 
 ---
 
 ## 12. Connection to RBDOps AI
+
+Pulse is a deliberate warm-up for the **RBD AI Operations Command Center** PRD — built on its exact recommended stack to de-risk the architecture. The full section-by-section mapping (✅ demonstrated / 🟡 partial / ⬜ by-design gaps) is in **[`docs/prd-alignment.md`](docs/prd-alignment.md)**. Quick view:
 
 | Pulse concept | RBDOps equivalent |
 |---------------|-------------------|
@@ -380,10 +429,12 @@ Use the **international** endpoint (`dashscope-intl.aliyuncs.com`), not the Chin
 | `task_events` | `task_history`, communications, meetings |
 | BullMQ workers | Ingestion workers per source (Graph, Asana, etc.) |
 | Health decay score | Project health score (0–100, weighted signals) |
-| Mood tagging | Tone/sentiment on emails + transcripts |
+| Hybrid sentiment (lexicon + LLM) | Tone/sentiment on emails + transcripts |
+| Valence × energy + health | Multi-signal project read; leading vs lagging indicators |
+| Divergence detection | Early-warning alerts (sentiment dropping before health does) |
 | task-events processor → pgvector | Event embeddings for RAG over activity |
 | Intel AI panel | Executive Q&A interface (Phase 2) |
-| Momentum meter | Team workload risk indicator |
+| 2-D mood map | Team morale / workload risk indicator |
 | SSE real-time feed | Executive daily digest / alert feed |
 
 ---
@@ -527,4 +578,8 @@ docker compose -f infra/docker-compose.yml exec postgres \
 | Delta/incremental updates | Health cron + event-triggered recompute |
 | Adapter pattern | Separate worker per concern |
 | Canonical event schema | `@pulse/shared-types` |
-| Real-time push | SSE from API to Intel |
+| Real-time push | SSE from API to Intel (shared `RealtimeProvider`) |
+| Hybrid sentiment | Instant lexicon baseline → async LLM refine ([`docs/mood-intelligence.md`](docs/mood-intelligence.md)) |
+| Multi-dimensional signals | Valence × energy + health; divergence over a blended score |
+| Leading vs lagging indicators | Sentiment (leading) paired with health decay (lagging) |
+| Graceful degradation | Lexicon works with no LLM; valence survives a missing API key |

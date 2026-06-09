@@ -1,7 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { EventType, IntelTaskDetail, Mood, TaskStatus } from '@pulse/shared-types';
+import {
+  classifyVibe,
+  detectDivergence,
+  MOOD_ENERGY,
+  VALENCE,
+  VIBE_LABELS,
+  type EventType,
+  type IntelTaskDetail,
+  type Mood,
+  type TaskStatus,
+  type Vibe,
+} from '@pulse/shared-types';
 import { fetchTaskDetail } from '@/lib/api';
 import { healthBarClasses, healthColor } from '@/lib/health';
 import type { TaskDetailHighlight } from './TaskDetailContext';
@@ -35,6 +46,21 @@ const EVENT_LABELS: Record<EventType, string> = {
   commented: 'Comment',
   reassigned: 'Reassigned',
 };
+
+const VIBE_CHIP: Record<Vibe, string> = {
+  in_flow: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25',
+  firefighting: 'bg-red-500/15 text-red-300 ring-red-500/25',
+  cruising: 'bg-sky-500/15 text-sky-300 ring-sky-500/25',
+  stalled: 'bg-slate-500/15 text-slate-300 ring-slate-500/25',
+};
+
+function valenceChip(v: number): string {
+  if (v >= VALENCE.positive) return 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25';
+  if (v <= VALENCE.negative) return 'bg-red-500/15 text-red-300 ring-red-500/25';
+  return 'bg-slate-500/15 text-slate-300 ring-slate-500/25';
+}
+
+const signed = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}`;
 
 function formatEventSummary(event: IntelTaskDetail['events'][number]): string {
   switch (event.eventType) {
@@ -112,6 +138,21 @@ export function TaskDetailDrawer({ taskId, highlight, onClose }: Props) {
   }, [onClose]);
 
   const health = task ? healthColor(task.healthScore) : 'amber';
+
+  // Per-task vibe + divergence from the most recent scored event.
+  const scored = task?.events.find((e) => e.sentiment != null) ?? null;
+  const vibe: Vibe | null =
+    scored?.sentiment != null
+      ? classifyVibe(scored.sentiment, MOOD_ENERGY[scored.mood])
+      : null;
+  const divergence =
+    task && scored?.sentiment != null
+      ? detectDivergence({
+          valence: scored.sentiment,
+          mood: scored.mood,
+          healthScore: task.healthScore,
+        })
+      : null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
@@ -214,6 +255,14 @@ export function TaskDetailDrawer({ taskId, highlight, onClose }: Props) {
                   >
                     Health {task.healthScore}
                   </span>
+                  {vibe && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${VIBE_CHIP[vibe]}`}
+                      title="Task vibe (valence × energy)"
+                    >
+                      {VIBE_LABELS[vibe]}
+                    </span>
+                  )}
                 </div>
 
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
@@ -222,6 +271,17 @@ export function TaskDetailDrawer({ taskId, highlight, onClose }: Props) {
                     style={{ width: `${task.healthScore}%` }}
                   />
                 </div>
+
+                {divergence && (
+                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300 ring-1 ring-inset ring-amber-500/20">
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                    </svg>
+                    <span>
+                      <span className="font-semibold">Divergence:</span> {divergence}
+                    </span>
+                  </div>
+                )}
 
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-[11px]">
                   <div>
@@ -314,10 +374,31 @@ export function TaskDetailDrawer({ taskId, highlight, onClose }: Props) {
                             </span>
                             <span
                               className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ring-1 ring-inset ${MOOD_STYLES[event.mood]}`}
+                              title="Energy"
                             >
                               {event.mood}
                             </span>
                           </div>
+                          {(event.sentiment != null || event.emotions?.length) && (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-white/6 pt-2">
+                              {event.sentiment != null && (
+                                <span
+                                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums ring-1 ring-inset ${valenceChip(event.sentiment)}`}
+                                  title="Sentiment valence (−1..1)"
+                                >
+                                  {signed(event.sentiment)}
+                                </span>
+                              )}
+                              {event.emotions?.map((e) => (
+                                <span
+                                  key={e}
+                                  className="rounded-full bg-white/6 px-1.5 py-0.5 text-[10px] text-slate-300"
+                                >
+                                  {e}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </li>
                     ))}

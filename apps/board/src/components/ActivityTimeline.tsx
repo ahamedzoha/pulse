@@ -1,9 +1,21 @@
 'use client';
 
-import type { EventType, Mood } from '@pulse/shared-types';
+import { VALENCE, type EventType, type Mood } from '@pulse/shared-types';
 import type { TaskEventItem } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/time';
 import { UserAvatar } from './UserAvatar';
+
+function valenceMeta(v: number): { label: string; cls: string } {
+  if (v >= VALENCE.positive) {
+    return { label: 'positive', cls: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25' };
+  }
+  if (v <= VALENCE.negative) {
+    return { label: 'negative', cls: 'bg-red-500/15 text-red-300 ring-red-500/25' };
+  }
+  return { label: 'neutral', cls: 'bg-slate-500/15 text-slate-300 ring-slate-500/25' };
+}
+
+const signed = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}`;
 
 const MOOD_STYLES: Record<Mood, string> = {
   high: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25',
@@ -104,10 +116,32 @@ export function ActivityTimeline({ events }: { events: TaskEventItem[] }) {
                 </span>
                 <span
                   className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ring-1 ring-inset ${MOOD_STYLES[event.mood]}`}
+                  title="Energy"
                 >
                   {event.mood}
                 </span>
               </div>
+
+              {(event.sentiment != null || event.emotions?.length) && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-white/6 pt-2">
+                  {event.sentiment != null && (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums ring-1 ring-inset ${valenceMeta(event.sentiment).cls}`}
+                      title="Sentiment valence (−1..1)"
+                    >
+                      {valenceMeta(event.sentiment).label} {signed(event.sentiment)}
+                    </span>
+                  )}
+                  {event.emotions?.map((e) => (
+                    <span
+                      key={e}
+                      className="rounded-full bg-white/6 px-1.5 py-0.5 text-[10px] text-slate-300"
+                    >
+                      {e}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </li>
         );

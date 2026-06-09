@@ -15,6 +15,8 @@ export class CreateTaskDto {
   @IsUUID()
   assigneeId?: string;
 
+  // Omit to auto-derive energy from sentiment; present = manual override.
+  @IsOptional()
   @IsIn([...MOODS])
-  mood: Mood = 'neutral';
+  mood?: Mood;
 }

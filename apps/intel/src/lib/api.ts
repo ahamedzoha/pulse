@@ -2,6 +2,7 @@ import type {
   ActivityFeedItem,
   IntelChatTurn,
   IntelTaskDetail,
+  Momentum2D,
   Role,
 } from '@pulse/shared-types';
 import { API_URL } from './config';
@@ -75,6 +76,13 @@ export function fetchTaskDetail(taskId: string): Promise<IntelTaskDetail> {
 
 export function fetchMomentum(): Promise<MomentumSnapshot> {
   return apiFetch('/intel/momentum');
+}
+
+export type { Momentum2D };
+
+/** Team affect on the valence × energy plane (24h). */
+export function fetchMomentum2d(): Promise<Momentum2D> {
+  return apiFetch('/intel/momentum2d');
 }
 
 export type FeedItem = ActivityFeedItem;

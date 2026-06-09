@@ -4,6 +4,7 @@ import type {
   EventType,
   IntelTaskEvent,
   Mood,
+  SentimentSource,
   TaskStatus,
 } from '@pulse/shared-types';
 import { DatabaseService } from '../database/database.service';
@@ -64,11 +65,15 @@ export class TasksService {
       new_value: string | null;
       comment_text: string | null;
       mood: Mood;
+      sentiment: number | null;
+      sentiment_src: SentimentSource | null;
+      emotions: string[] | null;
       occurred_at: Date;
       actor_name: string;
     }>(
       `SELECT te.id, te.event_type, te.old_value, te.new_value, te.comment_text,
-              te.mood, te.occurred_at, u.display_name AS actor_name
+              te.mood, te.sentiment, te.sentiment_src, te.emotions, te.occurred_at,
+              u.display_name AS actor_name
          FROM task_events te
          JOIN users u ON u.id = te.actor_id
         WHERE te.task_id = $1
@@ -85,6 +90,9 @@ export class TasksService {
       newValue: r.new_value ?? undefined,
       commentText: r.comment_text ?? undefined,
       mood: r.mood,
+      sentiment: r.sentiment,
+      sentimentSource: r.sentiment_src ?? undefined,
+      emotions: r.emotions ?? undefined,
       occurredAt: r.occurred_at.toISOString(),
     }));
   }

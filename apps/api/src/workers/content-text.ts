@@ -5,6 +5,7 @@ export function buildContentText(item: ActivityFeedItem): string {
   const who = item.actorName;
   const title = `"${item.taskTitle}"`;
   const mood = ` (mood: ${item.mood})`;
+  const felt = item.emotions?.length ? ` [felt: ${item.emotions.join(', ')}]` : '';
 
   switch (item.eventType) {
     case 'created':
@@ -12,7 +13,7 @@ export function buildContentText(item: ActivityFeedItem): string {
     case 'status_changed':
       return `${who} moved ${title} from ${item.oldValue} to ${item.newValue}${mood}`;
     case 'commented':
-      return `${who} commented on ${title}: ${item.commentText ?? ''}${mood}`;
+      return `${who} commented on ${title}: ${item.commentText ?? ''}${mood}${felt}`;
     case 'reassigned':
       return `${who} reassigned ${title}${mood}`;
     default:

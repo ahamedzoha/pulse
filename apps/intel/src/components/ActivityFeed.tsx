@@ -1,12 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { detectDivergence, VALENCE } from '@pulse/shared-types';
 import { fetchRecentFeed, type FeedItem } from '@/lib/api';
-import { getToken } from '@/lib/auth';
-import { API_URL } from '@/lib/config';
 import { Panel } from './Panel';
 import { LiveActivityToastStack, type ActivityToast } from './LiveActivityToast';
+import { useRealtime } from './RealtimeProvider';
 import { useTaskDetail } from './TaskDetailContext';
+
+function valenceChip(v: number): string {
+  if (v >= VALENCE.positive) return 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25';
+  if (v <= VALENCE.negative) return 'bg-red-500/15 text-red-300 ring-red-500/25';
+  return 'bg-slate-500/15 text-slate-300 ring-slate-500/25';
+}
+
+const signed = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(2)}`;
 
 const TOAST_TTL_MS = 5000;
 const MAX_TOASTS = 3;
@@ -77,9 +85,9 @@ function FeedIcon() {
 
 export function ActivityFeed() {
   const { openTask } = useTaskDetail();
+  const { connected, subscribe } = useRealtime();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [connected, setConnected] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ActivityToast[]>([]);
   const seenRef = useRef(new Set<string>());
@@ -101,9 +109,9 @@ export function ActivityFeed() {
     toastTimersRef.current.set(item.id, timer);
   };
 
+  // Hydrate recent history once (SSE only carries events after connect).
   useEffect(() => {
     let cancelled = false;
-
     fetchRecentFeed()
       .then((recent) => {
         if (cancelled) return;
@@ -111,7 +119,7 @@ export function ActivityFeed() {
         recent.forEach((item) => seenRef.current.add(item.id));
       })
       .catch(() => {
-        /* history optional — SSE still works */
+        /* history optional — live events still arrive */
       })
       .finally(() => {
         if (!cancelled) {
@@ -119,39 +127,32 @@ export function ActivityFeed() {
           setLoading(false);
         }
       });
-
-    const token = getToken();
-    const feedUrl = token
-      ? `${API_URL}/intel/feed?token=${encodeURIComponent(token)}`
-      : `${API_URL}/intel/feed`;
-    const es = new EventSource(feedUrl);
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
-    es.onmessage = (ev) => {
-      try {
-        const item = JSON.parse(ev.data) as FeedItem;
-        if (!seenRef.current.has(item.id)) {
-          seenRef.current.add(item.id);
-          setFlashId(item.id);
-          setTimeout(() => setFlashId(null), 1200);
-          if (hydratedRef.current) pushToast(item);
-        }
-        setItems((prev) => {
-          if (prev.some((x) => x.id === item.id)) return prev;
-          return [item, ...prev].slice(0, 50);
-        });
-      } catch {
-        /* ignore malformed */
-      }
-    };
-
     return () => {
       cancelled = true;
-      es.close();
-      for (const timer of toastTimersRef.current.values()) clearTimeout(timer);
-      toastTimersRef.current.clear();
     };
   }, []);
+
+  // Live events from the shared SSE connection.
+  useEffect(() => {
+    const unsubscribe = subscribe((item) => {
+      if (!seenRef.current.has(item.id)) {
+        seenRef.current.add(item.id);
+        setFlashId(item.id);
+        setTimeout(() => setFlashId(null), 1200);
+        if (hydratedRef.current) pushToast(item);
+      }
+      setItems((prev) => {
+        if (prev.some((x) => x.id === item.id)) return prev;
+        return [item, ...prev].slice(0, 50);
+      });
+    });
+    const timers = toastTimersRef.current;
+    return () => {
+      unsubscribe();
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, [subscribe]);
 
   const emptyMessage = loading
     ? 'Loading recent activity…'
@@ -185,7 +186,16 @@ export function ActivityFeed() {
       }
     >
       <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
-        {items.map((item) => (
+        {items.map((item) => {
+          const divergence =
+            item.sentiment != null
+              ? detectDivergence({
+                  valence: item.sentiment,
+                  mood: item.mood,
+                  healthScore: item.healthScore,
+                })
+              : null;
+          return (
           <li key={item.id}>
             <button
               type="button"
@@ -207,9 +217,18 @@ export function ActivityFeed() {
                     <span className="capitalize">{eventLabels[item.eventType]}</span>
                     <span
                       className={`rounded-full px-1.5 py-0.5 font-medium capitalize ring-1 ring-inset ${moodColors[item.mood]}`}
+                      title="Energy"
                     >
                       {item.mood}
                     </span>
+                    {item.sentiment != null && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 font-medium tabular-nums ring-1 ring-inset ${valenceChip(item.sentiment)}`}
+                        title="Sentiment valence (−1..1)"
+                      >
+                        {signed(item.sentiment)}
+                      </span>
+                    )}
                     <time dateTime={item.occurredAt}>
                       {new Date(item.occurredAt).toLocaleTimeString()}
                     </time>
@@ -220,11 +239,20 @@ export function ActivityFeed() {
                       </svg>
                     </span>
                   </div>
+                  {divergence && (
+                    <p className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-1 text-[10px] font-medium text-amber-300 ring-1 ring-inset ring-amber-500/20">
+                      <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                      </svg>
+                      {divergence}
+                    </p>
+                  )}
                 </div>
               </div>
             </button>
           </li>
-        ))}
+          );
+        })}
         {items.length === 0 && (
           <li className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 text-center">
             <div className="h-8 w-8 animate-pulse rounded-full border-2 border-white/10 border-t-pulse-accent" />
